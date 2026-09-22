@@ -59,8 +59,34 @@ function initElements() {
   els.checklistContent = getEl("checklistContent");
   els.copyJsonBtn = getEl("copyJsonBtn");
   els.downloadJsonBtn = getEl("downloadJsonBtn");
-  els.setAsSampleBtn = getEl("setAsSampleBtn");
   els.rawJson = getEl("rawJson");
+
+  /* Document Viewer Modal Elements */
+  els.openDocViewerBtn = getEl("openDocViewerBtn");
+  els.docViewerModal = getEl("docViewerModal");
+  els.docViewerBackdrop = getEl("docViewerBackdrop");
+  els.docViewerWindow = document.querySelector(".doc-viewer-window");
+  els.viewerCloseBtn = getEl("viewerCloseBtn");
+  els.viewerDocBadge = getEl("viewerDocBadge");
+  els.viewerDocTitle = getEl("viewerDocTitle");
+  els.viewerPageIndicator = getEl("viewerPageIndicator");
+  els.viewerPrevPageBtn = getEl("viewerPrevPageBtn");
+  els.viewerNextPageBtn = getEl("viewerNextPageBtn");
+  els.viewerPageInput = getEl("viewerPageInput");
+  els.viewerTotalPages = getEl("viewerTotalPages");
+  els.viewerZoomInBtn = getEl("viewerZoomInBtn");
+  els.viewerZoomOutBtn = getEl("viewerZoomOutBtn");
+  els.viewerFitWidthBtn = getEl("viewerFitWidthBtn");
+  els.viewerZoomLabel = getEl("viewerZoomLabel");
+  els.viewerToggleHighlightBtn = getEl("viewerToggleHighlightBtn");
+  els.docQuickNav = getEl("docQuickNav");
+  els.viewerHighlightBanner = getEl("viewerHighlightBanner");
+  els.viewerHighlightTargetText = getEl("viewerHighlightTargetText");
+  els.docViewerBody = getEl("docViewerBody");
+  els.docPageStage = getEl("docPageStage");
+  els.pdfCanvas = getEl("pdfCanvas");
+  els.highlightLayer = getEl("highlightLayer");
+  els.viewerLoadingSpinner = getEl("viewerLoadingSpinner");
 }
 
 function escapeHtml(value) {
@@ -441,7 +467,7 @@ function renderDocumentKeys(documentKeys) {
     if (Object.prototype.hasOwnProperty.call(documentKeys, key)) {
       cleanedVal = cleanText(documentKeys[key]);
       displayKey = simplifyKeyName(key);
-      html += '<div class="kv-item">';
+      html += '<div class="kv-item clickable-key" data-key="' + escapeHtml(key) + '" title="클릭하여 원본 서류의 해당 번호 위치로 이동 및 하이라이트">';
       html += '<span class="kv-key">' + escapeHtml(displayKey) + ':</span>';
       html += '<span class="kv-value">' + escapeHtml(cleanedVal || "-") + "</span>";
       html += "</div>";
@@ -449,6 +475,14 @@ function renderDocumentKeys(documentKeys) {
   }
 
   els.documentKeys.innerHTML = html || "결과 없음";
+
+  var items = els.documentKeys.querySelectorAll(".clickable-key");
+  items.forEach(function (el) {
+    el.addEventListener("click", function () {
+      var k = this.getAttribute("data-key");
+      openDocViewerWithField(k);
+    });
+  });
 }
 
 function renderDateTimeline(dateChecks) {
@@ -674,12 +708,12 @@ function renderComparisonTable(rows) {
       html += '<tr class="' + rowClass + '">';
       html += '<td><strong class="item-title-cell">' + escapeHtml(cleanText(itemTitle)) + '</strong></td>';
       html += '<td class="' + resultCellClass(row.result) + '">' + escapeHtml(koreanStatus(row.result)) + '</td>';
-      html += '<td>' + formatTableCellHtml(row.lc) + '</td>';
-      html += '<td>' + formatTableCellHtml(row.commercial_invoice || row.invoice) + '</td>';
-      html += '<td>' + formatTableCellHtml(row.bill_of_lading || row.bl) + '</td>';
-      html += '<td>' + formatTableCellHtml(row.packing_list) + '</td>';
-      html += '<td>' + formatTableCellHtml(row.marine_cargo_insurance || row.insurance) + '</td>';
-      html += '<td>' + formatTableCellHtml(row.certificate_of_origin || row.coo) + '</td>';
+      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="lc" title="클릭 시 관련 서류 위치 확인">' + formatTableCellHtml(row.lc) + '</td>';
+      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="invoice" title="클릭 시 상업송장 위치 확인">' + formatTableCellHtml(row.commercial_invoice || row.invoice) + '</td>';
+      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="bl" title="클릭 시 선하증권(B/L) 위치 확인">' + formatTableCellHtml(row.bill_of_lading || row.bl) + '</td>';
+      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="packing_list" title="클릭 시 포장명세서 위치 확인">' + formatTableCellHtml(row.packing_list) + '</td>';
+      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="insurance" title="클릭 시 해상보험증권 위치 확인">' + formatTableCellHtml(row.marine_cargo_insurance || row.insurance) + '</td>';
+      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="coo" title="클릭 시 원산지증명서 위치 확인">' + formatTableCellHtml(row.certificate_of_origin || row.coo) + '</td>';
       html += '</tr>';
 
       // Mobile Card Item
@@ -691,16 +725,16 @@ function renderComparisonTable(rows) {
       cardsHtml += '<div class="mobile-card-doc-grid">';
 
       var docs = [
-        { label: "LC", val: row.lc },
-        { label: "송장", val: row.commercial_invoice || row.invoice },
-        { label: "B/L", val: row.bill_of_lading || row.bl },
-        { label: "포장", val: row.packing_list },
-        { label: "보험", val: row.marine_cargo_insurance || row.insurance },
-        { label: "COO", val: row.certificate_of_origin || row.coo }
+        { label: "LC", val: row.lc, doc: "lc" },
+        { label: "송장", val: row.commercial_invoice || row.invoice, doc: "invoice" },
+        { label: "B/L", val: row.bill_of_lading || row.bl, doc: "bl" },
+        { label: "포장", val: row.packing_list, doc: "packing_list" },
+        { label: "보험", val: row.marine_cargo_insurance || row.insurance, doc: "insurance" },
+        { label: "COO", val: row.certificate_of_origin || row.coo, doc: "coo" }
       ];
 
       docs.forEach(function (d) {
-        cardsHtml += '<div class="mobile-doc-item">';
+        cardsHtml += '<div class="mobile-doc-item clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="' + d.doc + '" title="클릭 시 ' + escapeHtml(d.label) + ' 위치 확인">';
         cardsHtml += '<span class="mobile-doc-tag">' + escapeHtml(d.label) + '</span>';
         cardsHtml += '<div class="mobile-doc-val-wrap">' + formatTableCellHtml(d.val) + '</div>';
         cardsHtml += '</div>';
@@ -724,6 +758,16 @@ function renderComparisonTable(rows) {
   if (els.comparisonCardsContainer) {
     els.comparisonCardsContainer.innerHTML = cardsHtml;
   }
+
+  // Bind click listeners for table & card cells
+  var clickableCells = document.querySelectorAll(".data-table td.clickable-cell, .mobile-matrix-card .clickable-cell");
+  clickableCells.forEach(function (c) {
+    c.addEventListener("click", function () {
+      var itemKey = this.getAttribute("data-check-item");
+      var doc = this.getAttribute("data-doc");
+      openDocViewerWithCheckItem(itemKey, doc);
+    });
+  });
 }
 
 /* Render Per-Document Checklist Tabs & Content */
@@ -1316,6 +1360,7 @@ function fillSample(sampleIndex) {
   var fileName = "sample1.json";
   var sampleTitle = "실제샘플1";
 
+  currentActiveSampleIndex = idx;
   selectedFile = null;
 
   if (els.sampleSelect) {
@@ -1349,10 +1394,10 @@ function fillSample(sampleIndex) {
 
   if (idx === 1) {
     fileName = "sample1.json";
-    sampleTitle = "실제샘플1";
+    sampleTitle = "코오롱인더스트리 (실제샘플1)";
   } else if (idx === 2) {
     fileName = "sample2.json";
-    sampleTitle = "실제샘플2";
+    sampleTitle = "현대로템 (실제샘플2)";
   } else if (idx === 3) {
     fileName = "sample3.json";
     sampleTitle = "가상Match샘플";
@@ -1496,6 +1541,7 @@ function init() {
   initTheme();
   initComparisonViewToggle();
   initTableColumnHover();
+  initDocViewerEvents();
 
   loadConfig()
     .then(function () {
@@ -1530,4 +1576,495 @@ function init() {
     });
 }
 
+/* ==========================================================================
+   🌟 PDF Document Viewer & Interactive Highlighting Engine
+   ========================================================================== */
+
+var SAMPLE_DOC_REGISTRY = {
+  1: {
+    name: "코오롱인더스트리",
+    pdfPath: "./docs/sample1_kolon.pdf",
+    totalPages: 12,
+    sections: [
+      { page: 1, label: "인수통지 (p.1)", title: "선적서류 인수통지 (KDB)" },
+      { page: 2, label: "도착통지 (p.2)", title: "선적서류 도착통지 (KDB)" },
+      { page: 3, label: "상업송장 (p.3)", title: "COMMERCIAL INVOICE (Domo)" },
+      { page: 4, label: "패킹리스트 (p.4)", title: "PACKING LIST (Domo)" },
+      { page: 5, label: "선하증권 (p.5)", title: "BILL OF LADING (Pelorus)" },
+      { page: 6, label: "B/L첨부 (p.6)", title: "B/L ATTACHED STATEMENT" },
+      { page: 7, label: "해상보험 (p.7)", title: "CERTIFICATE OF INSURANCE (CNA)" },
+      { page: 9, label: "분석성적서 (p.9)", title: "CERTIFICATE OF ANALYSIS (Domo)" }
+    ],
+    docPages: {
+      lc: 3,
+      invoice: 3,
+      commercial_invoice: 3,
+      bl: 5,
+      bill_of_lading: 5,
+      packing_list: 4,
+      insurance: 7,
+      marine_cargo_insurance: 7,
+      coo: 1,
+      certificate_of_origin: 1
+    },
+    fieldMap: {
+      lc_number: { page: 3, label: "L/C 번호", text: "M0201602EU02535", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
+      lc_number_consistency: { page: 6, label: "B/L 첨부상 L/C 번호 오인 (M0201602E002535)", text: "M0201602E002535", box: { x: 0.33, y: 0.425, width: 0.24, height: 0.03 } },
+      invoice_number: { page: 3, label: "상업송장 번호", text: "1341243174", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
+      invoice_number_consistency: { page: 3, label: "상업송장 번호", text: "1341243174", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
+      bl_number: { page: 5, label: "선하증권(B/L) 번호", text: "LEJPUSG00218", box: { x: 0.76, y: 0.055, width: 0.19, height: 0.028 } },
+      policy_certificate_number: { page: 7, label: "보험증권 번호", text: "OMM 50296528", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
+      insurance_policy_issue_date: { page: 7, label: "보험증권 발행일", text: "25-Feb-2016", box: { x: 0.57, y: 0.145, width: 0.15, height: 0.025 } },
+      insurance_policy_issue_date_vs_shipment_date: { page: 7, label: "보험증권 발행일", text: "25-Feb-2016", box: { x: 0.57, y: 0.145, width: 0.15, height: 0.025 } },
+      seller_party_consistency: { page: 3, label: "수출자/송하인", text: "Domo Caproleuna GmbH", box: { x: 0.30, y: 0.78, width: 0.28, height: 0.05 } },
+      buyer_party_consistency: { page: 3, label: "수입자/수하인", text: "KOLON INDUSTRIES, INC", box: { x: 0.05, y: 0.19, width: 0.26, height: 0.05 } },
+      goods_description: { page: 3, label: "물품명세", text: "POLYAMIDE 6 CHIP DOMAMID 2403T-HS", box: { x: 0.34, y: 0.39, width: 0.40, height: 0.035 } },
+      package_count_consistency: { page: 4, label: "포장 수량", text: "80 (B/L 80 pallets)", box: { x: 0.80, y: 0.485, width: 0.09, height: 0.028 } },
+      gross_weight_consistency: { page: 3, label: "송장 총중량", text: "65.284 KG", box: { x: 0.63, y: 0.605, width: 0.17, height: 0.025 } },
+      measurement_cbm_consistency: { page: 5, label: "B/L CBM", text: "100 CBM", box: { x: 0.76, y: 0.665, width: 0.19, height: 0.032 } },
+      port_of_loading: { page: 5, label: "선적항", text: "HAMBURG EUROPEAN PORT", box: { x: 0.51, y: 0.32, width: 0.28, height: 0.025 } },
+      port_of_discharge: { page: 5, label: "양하항", text: "BUSAN, SOUTH KOREA", box: { x: 0.30, y: 0.35, width: 0.24, height: 0.025 } },
+      bl_shipment_date: { page: 5, label: "B/L 본선적재일", text: "25.02.2016", box: { x: 0.26, y: 0.885, width: 0.15, height: 0.03 } },
+      bl_shipment_date_vs_latest_shipment: { page: 5, label: "B/L 선적일", text: "25.02.2016", box: { x: 0.26, y: 0.885, width: 0.15, height: 0.03 } },
+      date_flow_timeline: { page: 4, label: "패킹리스트 날짜 OCR 오류 확인", text: "25.02.16 (2025 표기 오류)", box: { x: 0.39, y: 0.595, width: 0.13, height: 0.025 } }
+    }
+  },
+  2: {
+    name: "현대로템",
+    pdfPath: "./docs/sample2_hyundai_rotem.pdf",
+    totalPages: 10,
+    sections: [
+      { page: 1, label: "도착통지 (p.1)", title: "선적서류 도착통지 (KDB)" },
+      { page: 2, label: "상업송장 (p.2)", title: "INVOICE (Mitsubishi Electric)" },
+      { page: 3, label: "송장첨부 (p.3)", title: "INVOICE ATTACHED SHEET" },
+      { page: 4, label: "패킹리스트 (p.4)", title: "PACKING LIST (Mitsubishi Electric)" },
+      { page: 5, label: "패킹첨부 (p.5)", title: "PACKING LIST ATTACHED SHEET" },
+      { page: 8, label: "선하증권 (p.8)", title: "BILL OF LADING (Naigai Nitto)" },
+      { page: 9, label: "B/L첨부 (p.9)", title: "B/L ATTACHED SHEET" },
+      { page: 10, label: "해상보험 (p.10)", title: "MARINE CARGO POLICY (Tokio Marine)" }
+    ],
+    docPages: {
+      lc: 1,
+      invoice: 2,
+      commercial_invoice: 2,
+      bl: 8,
+      bill_of_lading: 8,
+      packing_list: 4,
+      insurance: 10,
+      marine_cargo_insurance: 10,
+      coo: 1,
+      certificate_of_origin: 1
+    },
+    fieldMap: {
+      lc_number: { page: 2, label: "송장 내 L/C 번호", text: "M0201410ES04828", box: { x: 0.17, y: 0.495, width: 0.24, height: 0.026 } },
+      lc_number_consistency: { page: 1, label: "도착통지 L/C 번호", text: "M0201410ES04828-053", box: { x: 0.12, y: 0.265, width: 0.25, height: 0.03 } },
+      invoice_number: { page: 2, label: "송장 번호", text: "A4631-L032-61", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
+      invoice_number_consistency: { page: 2, label: "송장 번호", text: "A4631-L032-61", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
+      bl_number: { page: 8, label: "B/L 번호", text: "RKOE076", box: { x: 0.72, y: 0.055, width: 0.21, height: 0.03 } },
+      policy_certificate_number: { page: 10, label: "보험증권 번호", text: "15-H0065622", box: { x: 0.07, y: 0.175, width: 0.19, height: 0.032 } },
+      insurance_policy_issue_date: { page: 10, label: "보험증권 발행일", text: "MAY 01, 2015", box: { x: 0.17, y: 0.63, width: 0.18, height: 0.03 } },
+      insurance_policy_issue_date_vs_shipment_date: { page: 10, label: "보험증권 발행일", text: "MAY 01, 2015", box: { x: 0.17, y: 0.63, width: 0.18, height: 0.03 } },
+      seller_party_consistency: { page: 2, label: "수출자", text: "MITSUBISHI ELECTRIC CORPORATION", box: { x: 0.03, y: 0.055, width: 0.38, height: 0.035 } },
+      buyer_party_consistency: { page: 2, label: "수입자", text: "Hyundai Rotem Company", box: { x: 0.03, y: 0.125, width: 0.32, height: 0.04 } },
+      goods_description: { page: 2, label: "물품명세", text: "MAIN PROPULSION ELECTRICAL EQUIPMENT", box: { x: 0.17, y: 0.375, width: 0.50, height: 0.035 } },
+      package_count_consistency: { page: 4, label: "포장 수량", text: "4 Cases", box: { x: 0.02, y: 0.835, width: 0.18, height: 0.03 } },
+      gross_weight_consistency: { page: 4, label: "패킹 총중량", text: "4,756 kgs", box: { x: 0.73, y: 0.565, width: 0.13, height: 0.028 } },
+      measurement_cbm_consistency: { page: 4, label: "패킹 CBM", text: "22.948 M3", box: { x: 0.85, y: 0.565, width: 0.13, height: 0.028 } },
+      port_of_loading: { page: 8, label: "선적항", text: "SHIMONOSEKI", box: { x: 0.27, y: 0.34, width: 0.20, height: 0.025 } },
+      port_of_discharge: { page: 8, label: "양하항", text: "BUSAN SEAPORT", box: { x: 0.03, y: 0.38, width: 0.25, height: 0.025 } },
+      bl_shipment_date: { page: 8, label: "B/L 선적일", text: "7 MAY 2015", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
+      bl_shipment_date_vs_latest_shipment: { page: 8, label: "B/L 선적일", text: "7 MAY 2015", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
+      date_flow_timeline: { page: 1, label: "도착통지일", text: "2015/05/18", box: { x: 0.02, y: 0.265, width: 0.12, height: 0.03 } }
+    }
+  }
+};
+
+var docViewerState = {
+  sampleIdx: 1,
+  pdfDoc: null,
+  currentPage: 1,
+  totalPages: 1,
+  zoom: 1.2,
+  showHighlights: true,
+  targetBox: null,
+  targetLabel: "",
+  loading: false,
+  renderTask: null
+};
+
+function initDocViewerEvents() {
+  if (els.openDocViewerBtn) {
+    els.openDocViewerBtn.addEventListener("click", function () {
+      openDocViewer(currentActiveSampleIndex || 1);
+    });
+  }
+
+  if (els.viewerCloseBtn) {
+    els.viewerCloseBtn.addEventListener("click", closeDocViewer);
+  }
+
+  if (els.docViewerBackdrop) {
+    els.docViewerBackdrop.addEventListener("click", closeDocViewer);
+  }
+
+  if (els.viewerPrevPageBtn) {
+    els.viewerPrevPageBtn.addEventListener("click", function () {
+      if (docViewerState.currentPage > 1) {
+        renderViewerPage(docViewerState.currentPage - 1);
+      }
+    });
+  }
+
+  if (els.viewerNextPageBtn) {
+    els.viewerNextPageBtn.addEventListener("click", function () {
+      if (docViewerState.currentPage < docViewerState.totalPages) {
+        renderViewerPage(docViewerState.currentPage + 1);
+      }
+    });
+  }
+
+  if (els.viewerPageInput) {
+    els.viewerPageInput.addEventListener("change", function (e) {
+      var p = parseInt(e.target.value, 10);
+      if (p >= 1 && p <= docViewerState.totalPages) {
+        renderViewerPage(p);
+      } else {
+        e.target.value = docViewerState.currentPage;
+      }
+    });
+  }
+
+  if (els.viewerZoomInBtn) {
+    els.viewerZoomInBtn.addEventListener("click", function () {
+      setViewerZoom(docViewerState.zoom + 0.2);
+    });
+  }
+
+  if (els.viewerZoomOutBtn) {
+    els.viewerZoomOutBtn.addEventListener("click", function () {
+      setViewerZoom(Math.max(0.6, docViewerState.zoom - 0.2));
+    });
+  }
+
+  if (els.viewerFitWidthBtn) {
+    els.viewerFitWidthBtn.addEventListener("click", function () {
+      setViewerZoom(1.0);
+    });
+  }
+
+  if (els.viewerToggleHighlightBtn) {
+    els.viewerToggleHighlightBtn.addEventListener("click", function () {
+      docViewerState.showHighlights = !docViewerState.showHighlights;
+      if (docViewerState.showHighlights) {
+        this.classList.remove("off");
+        this.classList.add("btn-highlight-active");
+        this.innerHTML = '<i class="bi bi-bounding-box"></i> <span>하이라이트 ON</span>';
+      } else {
+        this.classList.remove("btn-highlight-active");
+        this.classList.add("off");
+        this.innerHTML = '<i class="bi bi-bounding-box-circles"></i> <span>하이라이트 OFF</span>';
+      }
+      renderHighlightLayer(docViewerState.currentPage);
+    });
+  }
+
+  // Keyboard Navigation: ESC to close, Left/Right or PageUp/PageDown to navigate
+  document.addEventListener("keydown", function (e) {
+    if (!els.docViewerModal || els.docViewerModal.style.display === "none") return;
+
+    if (e.key === "Escape") {
+      closeDocViewer();
+    } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+      if (docViewerState.currentPage > 1) {
+        renderViewerPage(docViewerState.currentPage - 1);
+      }
+    } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+      if (docViewerState.currentPage < docViewerState.totalPages) {
+        renderViewerPage(docViewerState.currentPage + 1);
+      }
+    }
+  });
+}
+
+function setViewerZoom(newZoom) {
+  docViewerState.zoom = Math.round(newZoom * 10) / 10;
+  if (els.viewerZoomLabel) {
+    els.viewerZoomLabel.textContent = Math.round(docViewerState.zoom * 100) + "%";
+  }
+  renderViewerPage(docViewerState.currentPage, docViewerState.targetBox, docViewerState.targetLabel);
+}
+
+function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
+  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
+  if (sIdx !== 1 && sIdx !== 2) sIdx = 1;
+
+  docViewerState.sampleIdx = sIdx;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx];
+
+  // Open Modal
+  if (els.docViewerModal) {
+    els.docViewerModal.style.display = "flex";
+    setTimeout(function () {
+      els.docViewerModal.classList.add("open");
+    }, 10);
+  }
+
+  // Setup Quick Nav
+  renderQuickNavTabs(sIdx);
+
+  var pageToOpen = targetPage || 1;
+  docViewerState.targetBox = targetBox || null;
+  docViewerState.targetLabel = targetLabel || "";
+
+  // Set PDF.js Worker
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+
+  // Load PDF if not loaded or if sample changed
+  if (!docViewerState.pdfDoc || docViewerState.loadedPdfPath !== reg.pdfPath) {
+    if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "flex";
+    
+    if (window.pdfjsLib) {
+      window.pdfjsLib.getDocument(reg.pdfPath).promise.then(function (pdf) {
+        docViewerState.pdfDoc = pdf;
+        docViewerState.loadedPdfPath = reg.pdfPath;
+        docViewerState.totalPages = pdf.numPages || reg.totalPages;
+        renderViewerPage(pageToOpen, targetBox, targetLabel);
+      }).catch(function (err) {
+        console.error("PDF 로드 실패:", err);
+        if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "none";
+        alert("PDF 서류 로드에 실패했습니다. (경로: " + reg.pdfPath + ")\n" + err.message);
+      });
+    } else {
+      alert("PDF.js 라이브러리가 로드되지 않았습니다. 네트워크 연결을 확인하세요.");
+    }
+  } else {
+    renderViewerPage(pageToOpen, targetBox, targetLabel);
+  }
+}
+
+function closeDocViewer() {
+  if (!els.docViewerModal) return;
+  els.docViewerModal.classList.remove("open");
+  setTimeout(function () {
+    els.docViewerModal.style.display = "none";
+  }, 250);
+}
+
+function renderQuickNavTabs(sampleIdx) {
+  if (!els.docQuickNav) return;
+  var reg = SAMPLE_DOC_REGISTRY[sampleIdx] || SAMPLE_DOC_REGISTRY[1];
+  var sections = reg.sections || [];
+
+  var html = "";
+  sections.forEach(function (sec) {
+    html += '<button type="button" class="quick-doc-btn" data-page="' + sec.page + '" title="' + escapeHtml(sec.title) + '">';
+    html += '<i class="bi bi-file-earmark-text"></i> ' + escapeHtml(sec.label);
+    html += '</button>';
+  });
+
+  els.docQuickNav.innerHTML = html;
+
+  var btns = els.docQuickNav.querySelectorAll(".quick-doc-btn");
+  btns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var p = parseInt(this.getAttribute("data-page"), 10);
+      renderViewerPage(p);
+    });
+  });
+}
+
+function renderViewerPage(pageNum, targetBox, targetLabel) {
+  if (!docViewerState.pdfDoc) return;
+  if (pageNum < 1) pageNum = 1;
+  if (pageNum > docViewerState.totalPages) pageNum = docViewerState.totalPages;
+
+  docViewerState.currentPage = pageNum;
+  if (targetBox !== undefined) docViewerState.targetBox = targetBox;
+  if (targetLabel !== undefined) docViewerState.targetLabel = targetLabel;
+
+  if (els.viewerPageInput) els.viewerPageInput.value = pageNum;
+  if (els.viewerTotalPages) els.viewerTotalPages.textContent = docViewerState.totalPages;
+  if (els.viewerPageIndicator) els.viewerPageIndicator.textContent = "Page " + pageNum + " / " + docViewerState.totalPages;
+
+  var reg = SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx] || SAMPLE_DOC_REGISTRY[1];
+
+  var currentSec = null;
+  if (reg.sections) {
+    for (var i = 0; i < reg.sections.length; i++) {
+      if (reg.sections[i].page === pageNum) {
+        currentSec = reg.sections[i];
+        break;
+      }
+    }
+  }
+
+  if (els.viewerDocBadge) {
+    els.viewerDocBadge.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> ' + escapeHtml(reg.name);
+  }
+  if (els.viewerDocTitle) {
+    els.viewerDocTitle.textContent = currentSec ? currentSec.title : ("서류 페이지 " + pageNum);
+  }
+
+  if (els.docQuickNav) {
+    var qBtns = els.docQuickNav.querySelectorAll(".quick-doc-btn");
+    qBtns.forEach(function (b) {
+      var p = parseInt(b.getAttribute("data-page"), 10);
+      if (p === pageNum) b.classList.add("active");
+      else b.classList.remove("active");
+    });
+  }
+
+  if (docViewerState.targetBox && docViewerState.targetLabel) {
+    if (els.viewerHighlightBanner) els.viewerHighlightBanner.style.display = "flex";
+    if (els.viewerHighlightTargetText) els.viewerHighlightTargetText.textContent = "하이라이트: " + docViewerState.targetLabel;
+  } else {
+    if (els.viewerHighlightBanner) els.viewerHighlightBanner.style.display = "none";
+  }
+
+  if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "flex";
+
+  if (docViewerState.renderTask) {
+    try { docViewerState.renderTask.cancel(); } catch (e) {}
+    docViewerState.renderTask = null;
+  }
+
+  docViewerState.pdfDoc.getPage(pageNum).then(function (page) {
+    var scale = docViewerState.zoom || 1.2;
+    var viewport = page.getViewport({ scale: scale });
+
+    var canvas = els.pdfCanvas;
+    var ctx = canvas.getContext("2d");
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    var renderContext = {
+      canvasContext: ctx,
+      viewport: viewport
+    };
+
+    docViewerState.renderTask = page.render(renderContext);
+
+    docViewerState.renderTask.promise.then(function () {
+      if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "none";
+      renderHighlightLayer(pageNum);
+    }).catch(function (err) {
+      if (err && err.name === "RenderingCancelledException") return;
+      console.error("PDF 렌더링 에러:", err);
+      if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "none";
+    });
+  }).catch(function (err) {
+    console.error("페이지 로드 실패:", err);
+    if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "none";
+  });
+}
+
+function renderHighlightLayer(pageNum) {
+  if (!els.highlightLayer) return;
+  els.highlightLayer.innerHTML = "";
+
+  if (!docViewerState.showHighlights) return;
+
+  var reg = SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx] || SAMPLE_DOC_REGISTRY[1];
+  var fieldMap = reg.fieldMap || {};
+
+  var targetEl = null;
+
+  for (var k in fieldMap) {
+    if (!Object.prototype.hasOwnProperty.call(fieldMap, k)) continue;
+    var f = fieldMap[k];
+    if (f.page !== pageNum || !f.box) continue;
+
+    var isTarget = false;
+    if (docViewerState.targetBox) {
+      var dx = Math.abs(docViewerState.targetBox.x - f.box.x);
+      var dy = Math.abs(docViewerState.targetBox.y - f.box.y);
+      if (dx < 0.04 && dy < 0.04) {
+        isTarget = true;
+      }
+    }
+
+    var boxDiv = document.createElement("div");
+    boxDiv.className = "highlight-box" + (isTarget ? " target-active" : "");
+    boxDiv.style.left = (f.box.x * 100) + "%";
+    boxDiv.style.top = (f.box.y * 100) + "%";
+    boxDiv.style.width = (f.box.width * 100) + "%";
+    boxDiv.style.height = (f.box.height * 100) + "%";
+    boxDiv.setAttribute("title", f.label + (f.text ? " : " + f.text : ""));
+
+    if (isTarget) {
+      var l = document.createElement("span");
+      l.className = "highlight-box-label";
+      l.textContent = f.label;
+      boxDiv.appendChild(l);
+      targetEl = boxDiv;
+    }
+
+    els.highlightLayer.appendChild(boxDiv);
+  }
+
+  // If custom targetBox is on this page but not yet rendered
+  if (docViewerState.targetBox && !targetEl) {
+    var b = docViewerState.targetBox;
+    var customDiv = document.createElement("div");
+    customDiv.className = "highlight-box target-active";
+    customDiv.style.left = (b.x * 100) + "%";
+    customDiv.style.top = (b.y * 100) + "%";
+    customDiv.style.width = (b.width * 100) + "%";
+    customDiv.style.height = (b.height * 100) + "%";
+
+    if (docViewerState.targetLabel) {
+      var tag = document.createElement("span");
+      tag.className = "highlight-box-label";
+      tag.textContent = docViewerState.targetLabel;
+      customDiv.appendChild(tag);
+    }
+
+    els.highlightLayer.appendChild(customDiv);
+    targetEl = customDiv;
+  }
+
+  // Smooth scroll to target highlight box
+  if (targetEl && els.docViewerBody) {
+    setTimeout(function () {
+      targetEl.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }, 180);
+  }
+}
+
+function openDocViewerWithField(fieldKey) {
+  var sIdx = currentActiveSampleIndex || 1;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
+  var f = reg.fieldMap && reg.fieldMap[fieldKey];
+
+  if (f) {
+    openDocViewer(sIdx, f.page, f.box, f.label);
+  } else {
+    openDocViewer(sIdx, 1, null, fieldKey);
+  }
+}
+
+function openDocViewerWithCheckItem(checkItemKey, docType) {
+  var sIdx = currentActiveSampleIndex || 1;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
+  var f = reg.fieldMap && reg.fieldMap[checkItemKey];
+
+  if (f) {
+    openDocViewer(sIdx, f.page, f.box, f.label);
+  } else if (docType && reg.docPages && reg.docPages[docType]) {
+    openDocViewer(sIdx, reg.docPages[docType], null, docType);
+  } else {
+    openDocViewer(sIdx, 1, null, checkItemKey);
+  }
+}
+
+function openDocViewerForDoc(docKey) {
+  var sIdx = currentActiveSampleIndex || 1;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
+  var page = (reg.docPages && reg.docPages[docKey]) ? reg.docPages[docKey] : 1;
+  openDocViewer(sIdx, page, null, docKey);
+}
+
 document.addEventListener("DOMContentLoaded", init);
+

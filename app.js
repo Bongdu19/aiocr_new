@@ -373,8 +373,26 @@ function clearAll() {
 }
 
 function normalizeResultPayload(parsed) {
+  if (!parsed) return {};
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch (e) {
+      return {};
+    }
+  }
   if (parsed && parsed.structured_result) {
     return parsed.structured_result;
+  }
+  if (parsed && parsed.content) {
+    if (typeof parsed.content === "string") {
+      try {
+        var inner = JSON.parse(parsed.content);
+        return inner.structured_result || inner;
+      } catch (e) {}
+    } else if (typeof parsed.content === "object") {
+      return parsed.content.structured_result || parsed.content;
+    }
   }
   return parsed || {};
 }
@@ -1039,28 +1057,55 @@ function pollJob(apiKey, jobId) {
 }
 
 function extractResultText(finalJob) {
+  if (!finalJob) return null;
+
+  // 1) output_text (최신 Studio Agent shortcut)
   if (finalJob.output_text) {
     return finalJob.output_text;
   }
 
-  if (
-    finalJob.output &&
-    finalJob.output.length > 0 &&
-    finalJob.output[0].content &&
-    finalJob.output[0].content.length > 0 &&
-    finalJob.output[0].content[0].text
-  ) {
-    return finalJob.output[0].content[0].text;
+  // 2) content (sample1, sample2 등 래핑 응답 대응)
+  if (finalJob.content) {
+    return finalJob.content;
+  }
+
+  // 3) structured_result가 최상위에 직접 있는 경우
+  if (finalJob.structured_result) {
+    return finalJob.structured_result;
+  }
+
+  // 4) output 배열 순회
+  if (finalJob.output && Array.isArray(finalJob.output) && finalJob.output.length > 0) {
+    for (var i = finalJob.output.length - 1; i >= 0; i--) {
+      var item = finalJob.output[i];
+      if (item && Array.isArray(item.content)) {
+        for (var j = 0; j < item.content.length; j++) {
+          var c = item.content[j];
+          if (c && c.text) return c.text;
+          if (c && c.output_text) return c.output_text;
+        }
+      }
+    }
+  }
+
+  // 5) 최상위 자체가 분석 결과 데이터인 경우
+  if (finalJob.overall_status || finalJob.document_keys || finalJob.comparison_matrix) {
+    return finalJob;
   }
 
   return null;
 }
 
 function parseResultText(rawText) {
+  if (!rawText) return {};
+  if (typeof rawText === "object") {
+    return rawText;
+  }
   try {
     return JSON.parse(rawText);
   } catch (e) {
-    throw new Error("결과 JSON 파싱 실패: " + e.message + "\n원문: " + rawText);
+    console.error("결과 JSON 파싱 실패:", e, rawText);
+    throw new Error("결과 JSON 파싱 실패: " + e.message + "\n원문: " + String(rawText).slice(0, 100));
   }
 }
 

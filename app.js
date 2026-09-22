@@ -2174,30 +2174,132 @@ function renderHighlightLayer(pageNum) {
 
   if (!docViewerState.showHighlights) return;
 
-  var targetEl = null;
+  var reg = SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx] || SAMPLE_DOC_REGISTRY[1];
+  var pageBoxes = [];
+  var seenCoords = {};
 
-  // If targetBox is on this page, render it with glowing animation
-  if (docViewerState.targetBox) {
-    var b = docViewerState.targetBox;
+  // 1. 해당 페이지에 속한 모든 등록 필드 박스 수집 (docFieldMap)
+  if (reg.docFieldMap) {
+    for (var k in reg.docFieldMap) {
+      if (!Object.prototype.hasOwnProperty.call(reg.docFieldMap, k)) continue;
+      var item = reg.docFieldMap[k];
+      if (item && item.page === pageNum && item.box) {
+        var coordKey = Math.round(item.box.x * 100) + "_" + Math.round(item.box.y * 100);
+        if (!seenCoords[coordKey]) {
+          seenCoords[coordKey] = true;
+          pageBoxes.push({
+            label: item.label || "",
+            box: item.box,
+            key: k
+          });
+        }
+      }
+    }
+  }
+
+  // 2. fieldMap에서도 해당 페이지 박스 수집
+  if (reg.fieldMap) {
+    for (var fk in reg.fieldMap) {
+      if (!Object.prototype.hasOwnProperty.call(reg.fieldMap, fk)) continue;
+      var fItem = reg.fieldMap[fk];
+      if (fItem && fItem.page === pageNum && fItem.box) {
+        var fCoordKey = Math.round(fItem.box.x * 100) + "_" + Math.round(fItem.box.y * 100);
+        if (!seenCoords[fCoordKey]) {
+          seenCoords[fCoordKey] = true;
+          pageBoxes.push({
+            label: fItem.label || "",
+            box: fItem.box,
+            key: fk
+          });
+        }
+      }
+    }
+  }
+
+  var targetEl = null;
+  var targetRendered = false;
+
+  // 3. 수집된 모든 박스 렌더링: 타깃이면 파란색(target-active), 기본은 노란색(highlight-box)
+  pageBoxes.forEach(function (pb) {
+    var b = pb.box;
+    var isTarget = false;
+
+    if (docViewerState.targetBox) {
+      var dx = Math.abs(docViewerState.targetBox.x - b.x);
+      var dy = Math.abs(docViewerState.targetBox.y - b.y);
+      if (dx < 0.05 && dy < 0.05) {
+        isTarget = true;
+        targetRendered = true;
+      }
+    }
+
+    var boxDiv = document.createElement("div");
+    boxDiv.className = "highlight-box" + (isTarget ? " target-active" : "");
+    boxDiv.style.left = (b.x * 100) + "%";
+    boxDiv.style.top = (b.y * 100) + "%";
+    boxDiv.style.width = (b.width * 100) + "%";
+    boxDiv.style.height = (b.height * 100) + "%";
+    boxDiv.setAttribute("title", pb.label);
+
+    if (isTarget) {
+      var l = document.createElement("span");
+      l.className = "highlight-box-label";
+      l.textContent = docViewerState.targetLabel || pb.label;
+      boxDiv.appendChild(l);
+      targetEl = boxDiv;
+    } else {
+      // 기본 노란색 박스: 호버 시 노란색 라벨 표시
+      boxDiv.addEventListener("mouseenter", function () {
+        if (!boxDiv.classList.contains("target-active") && !boxDiv.querySelector(".highlight-box-label")) {
+          var tag = document.createElement("span");
+          tag.className = "highlight-box-label highlight-box-label-yellow";
+          tag.textContent = pb.label;
+          boxDiv.appendChild(tag);
+        }
+      });
+      boxDiv.addEventListener("mouseleave", function () {
+        if (!boxDiv.classList.contains("target-active")) {
+          var tag = boxDiv.querySelector(".highlight-box-label-yellow");
+          if (tag) tag.remove();
+        }
+      });
+    }
+
+    // 박스 클릭 시 파란색 타깃으로 전환
+    boxDiv.addEventListener("click", function (e) {
+      e.stopPropagation();
+      docViewerState.targetBox = b;
+      docViewerState.targetLabel = pb.label;
+      renderHighlightLayer(pageNum);
+      if (els.viewerHighlightBanner) els.viewerHighlightBanner.style.display = "flex";
+      if (els.viewerHighlightTargetText) els.viewerHighlightTargetText.textContent = "하이라이트: " + pb.label;
+    });
+
+    els.highlightLayer.appendChild(boxDiv);
+  });
+
+  // 4. 만약 targetBox가 목록에 없는 임의 위치라면, 파란색 타깃으로 추가 렌더링
+  if (docViewerState.targetBox && !targetRendered) {
+    var tb = docViewerState.targetBox;
     var customDiv = document.createElement("div");
     customDiv.className = "highlight-box target-active";
-    customDiv.style.left = (b.x * 100) + "%";
-    customDiv.style.top = (b.y * 100) + "%";
-    customDiv.style.width = (b.width * 100) + "%";
-    customDiv.style.height = (b.height * 100) + "%";
+    customDiv.style.left = (tb.x * 100) + "%";
+    customDiv.style.top = (tb.y * 100) + "%";
+    customDiv.style.width = (tb.width * 100) + "%";
+    customDiv.style.height = (tb.height * 100) + "%";
 
     if (docViewerState.targetLabel) {
-      var tag = document.createElement("span");
-      tag.className = "highlight-box-label";
-      tag.textContent = docViewerState.targetLabel;
-      customDiv.appendChild(tag);
+      var customTag = document.createElement("span");
+      customTag.className = "highlight-box-label";
+      customTag.textContent = docViewerState.targetLabel;
+      customDiv.appendChild(customTag);
     }
 
     els.highlightLayer.appendChild(customDiv);
     targetEl = customDiv;
   }
 
-  // Smooth scroll to target highlight box
+  // Smooth scroll to target
   if (targetEl && els.docViewerBody) {
     setTimeout(function () {
       targetEl.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });

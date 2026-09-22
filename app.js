@@ -61,12 +61,14 @@ function initElements() {
   els.downloadJsonBtn = getEl("downloadJsonBtn");
   els.rawJson = getEl("rawJson");
 
-  /* Document Viewer Modal Elements */
+  /* Document Viewer Floating Window Elements */
   els.openDocViewerBtn = getEl("openDocViewerBtn");
-  els.docViewerModal = getEl("docViewerModal");
-  els.docViewerBackdrop = getEl("docViewerBackdrop");
-  els.docViewerWindow = document.querySelector(".doc-viewer-window");
+  els.docViewerFloating = getEl("docViewerFloating");
+  els.docViewerHeader = getEl("docViewerHeader");
   els.viewerCloseBtn = getEl("viewerCloseBtn");
+  els.viewerDockBtn = getEl("viewerDockBtn");
+  els.viewerMaxBtn = getEl("viewerMaxBtn");
+  els.docViewerResizer = getEl("docViewerResizer");
   els.viewerDocBadge = getEl("viewerDocBadge");
   els.viewerDocTitle = getEl("viewerDocTitle");
   els.viewerPageIndicator = getEl("viewerPageIndicator");
@@ -1432,6 +1434,11 @@ function fillSample(sampleIndex) {
         els.lookupJobId.value = sampleData.id;
       }
       setStatus("샘플 결과 표시 중 (" + sampleTitle + ")", "job_id=" + (sampleData.id || fileName));
+
+      // 뷰어가 열려 있는 경우 새 샘플의 PDF로 즉시 전환
+      if (els.docViewerFloating && els.docViewerFloating.style.display !== "none") {
+        openDocViewer(idx, 1, null, null);
+      }
     })
     .catch(function (error) {
       console.error(error);
@@ -1577,7 +1584,7 @@ function init() {
 }
 
 /* ==========================================================================
-   🌟 PDF Document Viewer & Interactive Highlighting Engine
+   🌟 PDF Document Viewer & Interactive Highlighting Engine (Modeless Floating)
    ========================================================================== */
 
 var SAMPLE_DOC_REGISTRY = {
@@ -1596,7 +1603,7 @@ var SAMPLE_DOC_REGISTRY = {
       { page: 9, label: "분석성적서 (p.9)", title: "CERTIFICATE OF ANALYSIS (Domo)" }
     ],
     docPages: {
-      lc: 3,
+      lc: 1,
       invoice: 3,
       commercial_invoice: 3,
       bl: 5,
@@ -1607,26 +1614,70 @@ var SAMPLE_DOC_REGISTRY = {
       coo: 1,
       certificate_of_origin: 1
     },
+    // Document Keys 단독 클릭용 기본 맵
     fieldMap: {
-      lc_number: { page: 3, label: "L/C 번호", text: "M0201602EU02535", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
-      lc_number_consistency: { page: 6, label: "B/L 첨부상 L/C 번호 오인 (M0201602E002535)", text: "M0201602E002535", box: { x: 0.33, y: 0.425, width: 0.24, height: 0.03 } },
+      lc_number: { page: 3, label: "L/C 번호 (송장)", text: "M0201602EU02535", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
       invoice_number: { page: 3, label: "상업송장 번호", text: "1341243174", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
-      invoice_number_consistency: { page: 3, label: "상업송장 번호", text: "1341243174", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
       bl_number: { page: 5, label: "선하증권(B/L) 번호", text: "LEJPUSG00218", box: { x: 0.76, y: 0.055, width: 0.19, height: 0.028 } },
       policy_certificate_number: { page: 7, label: "보험증권 번호", text: "OMM 50296528", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
-      insurance_policy_issue_date: { page: 7, label: "보험증권 발행일", text: "25-Feb-2016", box: { x: 0.57, y: 0.145, width: 0.15, height: 0.025 } },
-      insurance_policy_issue_date_vs_shipment_date: { page: 7, label: "보험증권 발행일", text: "25-Feb-2016", box: { x: 0.57, y: 0.145, width: 0.15, height: 0.025 } },
-      seller_party_consistency: { page: 3, label: "수출자/송하인", text: "Domo Caproleuna GmbH", box: { x: 0.30, y: 0.78, width: 0.28, height: 0.05 } },
-      buyer_party_consistency: { page: 3, label: "수입자/수하인", text: "KOLON INDUSTRIES, INC", box: { x: 0.05, y: 0.19, width: 0.26, height: 0.05 } },
-      goods_description: { page: 3, label: "물품명세", text: "POLYAMIDE 6 CHIP DOMAMID 2403T-HS", box: { x: 0.34, y: 0.39, width: 0.40, height: 0.035 } },
-      package_count_consistency: { page: 4, label: "포장 수량", text: "80 (B/L 80 pallets)", box: { x: 0.80, y: 0.485, width: 0.09, height: 0.028 } },
-      gross_weight_consistency: { page: 3, label: "송장 총중량", text: "65.284 KG", box: { x: 0.63, y: 0.605, width: 0.17, height: 0.025 } },
-      measurement_cbm_consistency: { page: 5, label: "B/L CBM", text: "100 CBM", box: { x: 0.76, y: 0.665, width: 0.19, height: 0.032 } },
-      port_of_loading: { page: 5, label: "선적항", text: "HAMBURG EUROPEAN PORT", box: { x: 0.51, y: 0.32, width: 0.28, height: 0.025 } },
-      port_of_discharge: { page: 5, label: "양하항", text: "BUSAN, SOUTH KOREA", box: { x: 0.30, y: 0.35, width: 0.24, height: 0.025 } },
-      bl_shipment_date: { page: 5, label: "B/L 본선적재일", text: "25.02.2016", box: { x: 0.26, y: 0.885, width: 0.15, height: 0.03 } },
-      bl_shipment_date_vs_latest_shipment: { page: 5, label: "B/L 선적일", text: "25.02.2016", box: { x: 0.26, y: 0.885, width: 0.15, height: 0.03 } },
-      date_flow_timeline: { page: 4, label: "패킹리스트 날짜 OCR 오류 확인", text: "25.02.16 (2025 표기 오류)", box: { x: 0.39, y: 0.595, width: 0.13, height: 0.025 } }
+      certificate_number: { page: 1, label: "원산지증명서 미제출", text: "-", box: null }
+    },
+    // [docType]::[checkItemKey] 서류별 세부 바운딩 박스 매핑
+    docFieldMap: {
+      // L/C 번호
+      "invoice::lc_number": { page: 3, label: "송장 내 L/C 번호", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
+      "invoice::lc_number_consistency": { page: 3, label: "송장 내 L/C 번호", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
+      "bl::lc_number": { page: 6, label: "B/L 첨부 내 L/C 번호 (오인 위치)", box: { x: 0.33, y: 0.425, width: 0.24, height: 0.03 } },
+      "bl::lc_number_consistency": { page: 6, label: "B/L 첨부 내 L/C 번호 (오인 위치)", box: { x: 0.33, y: 0.425, width: 0.24, height: 0.03 } },
+      "packing_list::lc_number": { page: 4, label: "패킹리스트 내 L/C 번호", box: { x: 0.40, y: 0.295, width: 0.22, height: 0.03 } },
+      "insurance::lc_number": { page: 7, label: "보험증권 내 L/C 번호", box: { x: 0.05, y: 0.455, width: 0.22, height: 0.03 } },
+
+      // 송장 번호
+      "invoice::invoice_number": { page: 3, label: "상업송장 번호", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
+      "invoice::invoice_number_consistency": { page: 3, label: "상업송장 번호", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
+      "insurance::invoice_number": { page: 7, label: "보험증권 내 송장 참조", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
+
+      // B/L 번호
+      "bl::bl_number": { page: 5, label: "B/L 번호", box: { x: 0.76, y: 0.055, width: 0.19, height: 0.028 } },
+      "bl::bl_number_consistency": { page: 5, label: "B/L 번호", box: { x: 0.76, y: 0.055, width: 0.19, height: 0.028 } },
+      "lc::bl_number": { page: 1, label: "인수통지서 내 B/L 번호", box: { x: 0.30, y: 0.33, width: 0.20, height: 0.03 } },
+
+      // 보험 증권번호
+      "insurance::policy_certificate_number": { page: 7, label: "보험증권 번호", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
+
+      // 당사자 정보
+      "invoice::seller_party_consistency": { page: 3, label: "송장 수출자 (Domo Caproleuna)", box: { x: 0.30, y: 0.78, width: 0.28, height: 0.05 } },
+      "bl::seller_party_consistency": { page: 5, label: "B/L 송하인 (Shipper)", box: { x: 0.02, y: 0.045, width: 0.28, height: 0.055 } },
+      "insurance::seller_party_consistency": { page: 7, label: "보험 피보험자 (Assured)", box: { x: 0.05, y: 0.175, width: 0.30, height: 0.035 } },
+
+      "invoice::buyer_party_consistency": { page: 3, label: "송장 수입자 (KOLON INDUSTRIES)", box: { x: 0.05, y: 0.19, width: 0.26, height: 0.05 } },
+      "bl::buyer_party_consistency": { page: 5, label: "B/L 통지처 (Notify Party)", box: { x: 0.02, y: 0.21, width: 0.32, height: 0.06 } },
+      "packing_list::buyer_party_consistency": { page: 4, label: "패킹 수하인 (Applicant)", box: { x: 0.06, y: 0.20, width: 0.26, height: 0.05 } },
+
+      // 물품 및 조건
+      "invoice::goods_description": { page: 3, label: "송장 품명 명세", box: { x: 0.34, y: 0.39, width: 0.40, height: 0.035 } },
+      "bl::goods_description": { page: 6, label: "B/L 첨부 품명", box: { x: 0.34, y: 0.27, width: 0.30, height: 0.04 } },
+      "packing_list::goods_description": { page: 4, label: "패킹 품명 명세", box: { x: 0.40, y: 0.35, width: 0.35, height: 0.035 } },
+
+      // 중량 및 포장
+      "invoice::gross_weight_consistency": { page: 3, label: "송장 총중량 (65.284 KG)", box: { x: 0.63, y: 0.605, width: 0.17, height: 0.025 } },
+      "packing_list::gross_weight_consistency": { page: 4, label: "패킹 총중량 (65.284,00)", box: { x: 0.61, y: 0.505, width: 0.16, height: 0.025 } },
+      "bl::gross_weight_consistency": { page: 5, label: "B/L 총중량 (65284,000 KG)", box: { x: 0.60, y: 0.67, width: 0.15, height: 0.028 } },
+
+      "packing_list::package_count_consistency": { page: 4, label: "패킹 수량 (80)", box: { x: 0.80, y: 0.485, width: 0.09, height: 0.028 } },
+      "bl::package_count_consistency": { page: 5, label: "B/L 포장 수량 (80)", box: { x: 0.22, y: 0.69, width: 0.07, height: 0.025 } },
+
+      "bl::measurement_cbm_consistency": { page: 5, label: "B/L 용적 (100,000 CBM)", box: { x: 0.76, y: 0.665, width: 0.19, height: 0.032 } },
+      "packing_list::measurement_cbm_consistency": { page: 4, label: "패킹 용적 (미기재 확인)", box: null },
+
+      // 운송 및 날짜
+      "bl::port_of_loading": { page: 5, label: "선적항 (HAMBURG)", box: { x: 0.51, y: 0.32, width: 0.28, height: 0.025 } },
+      "bl::port_of_discharge": { page: 5, label: "양하항 (BUSAN)", box: { x: 0.30, y: 0.35, width: 0.24, height: 0.025 } },
+      "bl::bl_shipment_date": { page: 5, label: "B/L 본선적재일 (25.02.2016)", box: { x: 0.26, y: 0.885, width: 0.15, height: 0.03 } },
+      "bl::bl_shipment_date_vs_latest_shipment": { page: 5, label: "B/L 선적일", box: { x: 0.26, y: 0.885, width: 0.15, height: 0.03 } },
+      "insurance::insurance_policy_issue_date": { page: 7, label: "보험증권 발행일 (25-Feb-2016)", box: { x: 0.57, y: 0.145, width: 0.15, height: 0.025 } },
+      "insurance::insurance_policy_issue_date_vs_shipment_date": { page: 7, label: "보험증권 발행일", box: { x: 0.57, y: 0.145, width: 0.15, height: 0.025 } },
+      "packing_list::date_flow_timeline": { page: 4, label: "패킹 날짜 표기 (25.02.16)", box: { x: 0.39, y: 0.595, width: 0.13, height: 0.025 } }
     }
   },
   2: {
@@ -1657,24 +1708,73 @@ var SAMPLE_DOC_REGISTRY = {
     },
     fieldMap: {
       lc_number: { page: 2, label: "송장 내 L/C 번호", text: "M0201410ES04828", box: { x: 0.17, y: 0.495, width: 0.24, height: 0.026 } },
-      lc_number_consistency: { page: 1, label: "도착통지 L/C 번호", text: "M0201410ES04828-053", box: { x: 0.12, y: 0.265, width: 0.25, height: 0.03 } },
       invoice_number: { page: 2, label: "송장 번호", text: "A4631-L032-61", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
-      invoice_number_consistency: { page: 2, label: "송장 번호", text: "A4631-L032-61", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
       bl_number: { page: 8, label: "B/L 번호", text: "RKOE076", box: { x: 0.72, y: 0.055, width: 0.21, height: 0.03 } },
       policy_certificate_number: { page: 10, label: "보험증권 번호", text: "15-H0065622", box: { x: 0.07, y: 0.175, width: 0.19, height: 0.032 } },
-      insurance_policy_issue_date: { page: 10, label: "보험증권 발행일", text: "MAY 01, 2015", box: { x: 0.17, y: 0.63, width: 0.18, height: 0.03 } },
-      insurance_policy_issue_date_vs_shipment_date: { page: 10, label: "보험증권 발행일", text: "MAY 01, 2015", box: { x: 0.17, y: 0.63, width: 0.18, height: 0.03 } },
-      seller_party_consistency: { page: 2, label: "수출자", text: "MITSUBISHI ELECTRIC CORPORATION", box: { x: 0.03, y: 0.055, width: 0.38, height: 0.035 } },
-      buyer_party_consistency: { page: 2, label: "수입자", text: "Hyundai Rotem Company", box: { x: 0.03, y: 0.125, width: 0.32, height: 0.04 } },
-      goods_description: { page: 2, label: "물품명세", text: "MAIN PROPULSION ELECTRICAL EQUIPMENT", box: { x: 0.17, y: 0.375, width: 0.50, height: 0.035 } },
-      package_count_consistency: { page: 4, label: "포장 수량", text: "4 Cases", box: { x: 0.02, y: 0.835, width: 0.18, height: 0.03 } },
-      gross_weight_consistency: { page: 4, label: "패킹 총중량", text: "4,756 kgs", box: { x: 0.73, y: 0.565, width: 0.13, height: 0.028 } },
-      measurement_cbm_consistency: { page: 4, label: "패킹 CBM", text: "22.948 M3", box: { x: 0.85, y: 0.565, width: 0.13, height: 0.028 } },
-      port_of_loading: { page: 8, label: "선적항", text: "SHIMONOSEKI", box: { x: 0.27, y: 0.34, width: 0.20, height: 0.025 } },
-      port_of_discharge: { page: 8, label: "양하항", text: "BUSAN SEAPORT", box: { x: 0.03, y: 0.38, width: 0.25, height: 0.025 } },
-      bl_shipment_date: { page: 8, label: "B/L 선적일", text: "7 MAY 2015", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
-      bl_shipment_date_vs_latest_shipment: { page: 8, label: "B/L 선적일", text: "7 MAY 2015", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
-      date_flow_timeline: { page: 1, label: "도착통지일", text: "2015/05/18", box: { x: 0.02, y: 0.265, width: 0.12, height: 0.03 } }
+      certificate_number: { page: 1, label: "원산지증명서 미제출", text: "-", box: null }
+    },
+    docFieldMap: {
+      // L/C 번호
+      "lc::lc_number": { page: 1, label: "도착통지 L/C 번호", box: { x: 0.12, y: 0.265, width: 0.25, height: 0.03 } },
+      "lc::lc_number_consistency": { page: 1, label: "도착통지 L/C 번호", box: { x: 0.12, y: 0.265, width: 0.25, height: 0.03 } },
+      "invoice::lc_number": { page: 2, label: "송장 내 L/C 번호", box: { x: 0.17, y: 0.495, width: 0.24, height: 0.026 } },
+      "invoice::lc_number_consistency": { page: 2, label: "송장 내 L/C 번호", box: { x: 0.17, y: 0.495, width: 0.24, height: 0.026 } },
+      "packing_list::lc_number": { page: 4, label: "패킹 내 L/C 번호", box: { x: 0.21, y: 0.51, width: 0.20, height: 0.026 } },
+      "insurance::lc_number": { page: 10, label: "보험 내 L/C 번호", box: { x: 0.48, y: 0.27, width: 0.18, height: 0.025 } },
+
+      // 송장 번호
+      "invoice::invoice_number": { page: 2, label: "송장 번호", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
+      "invoice::invoice_number_consistency": { page: 2, label: "송장 번호", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
+      "packing_list::invoice_number": { page: 4, label: "패킹 내 송장 참조", box: { x: 0.55, y: 0.08, width: 0.16, height: 0.026 } },
+      "insurance::invoice_number": { page: 10, label: "보험 내 송장 참조", box: { x: 0.42, y: 0.125, width: 0.15, height: 0.025 } },
+
+      // B/L 번호
+      "bl::bl_number": { page: 8, label: "B/L 번호", box: { x: 0.72, y: 0.055, width: 0.21, height: 0.03 } },
+      "bl::bl_number_consistency": { page: 8, label: "B/L 번호", box: { x: 0.72, y: 0.055, width: 0.21, height: 0.03 } },
+      "lc::bl_number": { page: 1, label: "도착통지서 B/L 번호", box: { x: 0.52, y: 0.27, width: 0.14, height: 0.028 } },
+
+      // 보험증권 번호
+      "insurance::policy_certificate_number": { page: 10, label: "보험증권 번호", box: { x: 0.07, y: 0.175, width: 0.19, height: 0.032 } },
+
+      // 당사자 정보
+      "invoice::seller_party_consistency": { page: 2, label: "송장 수출자 (Mitsubishi Electric)", box: { x: 0.03, y: 0.055, width: 0.38, height: 0.035 } },
+      "bl::seller_party_consistency": { page: 8, label: "B/L 송하인 (Shipper)", box: { x: 0.03, y: 0.055, width: 0.35, height: 0.035 } },
+      "insurance::seller_party_consistency": { page: 10, label: "보험 피보험자 (Assured)", box: { x: 0.04, y: 0.135, width: 0.35, height: 0.025 } },
+
+      "invoice::buyer_party_consistency": { page: 2, label: "송장 바이어 (Hyundai Rotem)", box: { x: 0.03, y: 0.125, width: 0.32, height: 0.04 } },
+      "bl::buyer_party_consistency": { page: 8, label: "B/L 통지처 (Notify Party)", box: { x: 0.03, y: 0.22, width: 0.35, height: 0.04 } },
+      "packing_list::buyer_party_consistency": { page: 4, label: "패킹 바이어 (Buyer)", box: { x: 0.04, y: 0.135, width: 0.30, height: 0.04 } },
+
+      // 물품 및 조건
+      "invoice::goods_description": { page: 2, label: "송장 품명 명세", box: { x: 0.17, y: 0.375, width: 0.50, height: 0.035 } },
+      "bl::goods_description": { page: 9, label: "B/L 첨부 품명", box: { x: 0.16, y: 0.20, width: 0.50, height: 0.035 } },
+      "insurance::goods_description": { page: 10, label: "보험 품명 명세", box: { x: 0.06, y: 0.46, width: 0.45, height: 0.035 } },
+
+      // 중량 및 포장
+      "packing_list::package_count_consistency": { page: 4, label: "패킹 수량 (Total: 4 Cases)", box: { x: 0.02, y: 0.835, width: 0.18, height: 0.03 } },
+      "bl::package_count_consistency": { page: 8, label: "B/L 수량 (4 CASES)", box: { x: 0.40, y: 0.435, width: 0.12, height: 0.025 } },
+      "insurance::package_count_consistency": { page: 10, label: "보험 수량 (4 CASES)", box: { x: 0.43, y: 0.285, width: 0.14, height: 0.025 } },
+
+      "packing_list::gross_weight_consistency": { page: 4, label: "패킹 총중량 (4,756 kgs)", box: { x: 0.73, y: 0.565, width: 0.13, height: 0.028 } },
+      "bl::gross_weight_consistency": { page: 8, label: "B/L 총중량 (4.756.00)", box: { x: 0.71, y: 0.435, width: 0.12, height: 0.025 } },
+
+      "packing_list::measurement_cbm_consistency": { page: 4, label: "패킹 CBM (22.948 M3)", box: { x: 0.85, y: 0.565, width: 0.13, height: 0.028 } },
+      "bl::measurement_cbm_consistency": { page: 8, label: "B/L CBM (22.948)", box: { x: 0.84, y: 0.435, width: 0.12, height: 0.025 } },
+
+      // 운송 및 날짜
+      "invoice::port_of_loading": { page: 2, label: "송장 선적항 (Shimonoseki)", box: { x: 0.04, y: 0.305, width: 0.22, height: 0.025 } },
+      "bl::port_of_loading": { page: 8, label: "B/L 선적항 (SHIMONOSEKI)", box: { x: 0.26, y: 0.34, width: 0.18, height: 0.025 } },
+      "insurance::port_of_loading": { page: 10, label: "보험 선적항 (SHIMONOSEKI SEAPORT)", box: { x: 0.23, y: 0.38, width: 0.18, height: 0.025 } },
+
+      "invoice::port_of_discharge": { page: 2, label: "송장 양하항 (Busan seaport)", box: { x: 0.04, y: 0.335, width: 0.22, height: 0.025 } },
+      "bl::port_of_discharge": { page: 8, label: "B/L 양하항 (BUSAN SEAPORT)", box: { x: 0.03, y: 0.38, width: 0.20, height: 0.025 } },
+      "insurance::port_of_discharge": { page: 10, label: "보험 양하항 (BUSAN SEAPORT)", box: { x: 0.04, y: 0.415, width: 0.18, height: 0.025 } },
+
+      "bl::bl_shipment_date": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
+      "bl::bl_shipment_date_vs_latest_shipment": { page: 8, label: "B/L 선적일", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
+      "insurance::insurance_policy_issue_date": { page: 10, label: "보험증권 발행일 (MAY 01, 2015)", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } },
+      "insurance::insurance_policy_issue_date_vs_shipment_date": { page: 10, label: "보험증권 발행일", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } },
+      "lc::date_flow_timeline": { page: 1, label: "도착통지일 (2015/05/18)", box: { x: 0.02, y: 0.265, width: 0.12, height: 0.03 } }
     }
   }
 };
@@ -1682,17 +1782,130 @@ var SAMPLE_DOC_REGISTRY = {
 var docViewerState = {
   sampleIdx: 1,
   pdfDoc: null,
+  loadedPdfPath: null,
   currentPage: 1,
   totalPages: 1,
-  zoom: 1.2,
+  zoom: 1.1,
   showHighlights: true,
   targetBox: null,
   targetLabel: "",
   loading: false,
-  renderTask: null
+  renderTask: null,
+  isMaximized: false,
+  // Floating Window Drag & Resize State
+  isDragging: false,
+  dragStartX: 0,
+  dragStartY: 0,
+  winStartLeft: 0,
+  winStartTop: 0
 };
 
+/* Floating Window Draggable & Resizable Controller */
+function initFloatingWindowControls() {
+  var win = els.docViewerFloating;
+  var header = els.docViewerHeader;
+  if (!win || !header) return;
+
+  // 1. Draggable by Header
+  header.addEventListener("mousedown", function (e) {
+    if (docViewerState.isMaximized) return;
+    // Don't drag if clicking buttons or inputs in header
+    if (e.target.closest("button") || e.target.closest("input")) return;
+
+    docViewerState.isDragging = true;
+    docViewerState.dragStartX = e.clientX;
+    docViewerState.dragStartY = e.clientY;
+
+    var rect = win.getBoundingClientRect();
+    docViewerState.winStartLeft = rect.left;
+    docViewerState.winStartTop = rect.top;
+
+    // Switch right positioning to left positioning for precise dragging
+    win.style.right = "auto";
+    win.style.bottom = "auto";
+    win.style.left = rect.left + "px";
+    win.style.top = rect.top + "px";
+
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+  });
+
+  window.addEventListener("mousemove", function (e) {
+    if (!docViewerState.isDragging || !win) return;
+
+    var dx = e.clientX - docViewerState.dragStartX;
+    var dy = e.clientY - docViewerState.dragStartY;
+
+    var newLeft = docViewerState.winStartLeft + dx;
+    var newTop = docViewerState.winStartTop + dy;
+
+    // Boundaries
+    var maxLeft = window.innerWidth - 100;
+    var maxTop = window.innerHeight - 80;
+    if (newLeft < 10) newLeft = 10;
+    if (newLeft > maxLeft) newLeft = maxLeft;
+    if (newTop < 10) newTop = 10;
+    if (newTop > maxTop) newTop = maxTop;
+
+    win.style.left = newLeft + "px";
+    win.style.top = newTop + "px";
+  });
+
+  window.addEventListener("mouseup", function () {
+    if (docViewerState.isDragging) {
+      docViewerState.isDragging = false;
+      document.body.style.userSelect = "";
+    }
+  });
+
+  // 2. Window Control Buttons
+  if (els.viewerDockBtn) {
+    els.viewerDockBtn.addEventListener("click", resetFloatingDockPosition);
+  }
+
+  if (els.viewerMaxBtn) {
+    els.viewerMaxBtn.addEventListener("click", toggleFloatingMaximize);
+  }
+}
+
+function resetFloatingDockPosition() {
+  var win = els.docViewerFloating;
+  if (!win) return;
+  win.classList.remove("maximized");
+  docViewerState.isMaximized = false;
+  if (els.viewerMaxBtn) {
+    els.viewerMaxBtn.innerHTML = '<i class="bi bi-arrows-fullscreen"></i>';
+    els.viewerMaxBtn.title = "최대화";
+  }
+  win.style.left = "auto";
+  win.style.bottom = "auto";
+  win.style.top = "70px";
+  win.style.right = "24px";
+  win.style.width = "740px";
+  win.style.height = "calc(100vh - 95px)";
+}
+
+function toggleFloatingMaximize() {
+  var win = els.docViewerFloating;
+  if (!win) return;
+
+  docViewerState.isMaximized = !docViewerState.isMaximized;
+  if (docViewerState.isMaximized) {
+    win.classList.add("maximized");
+    if (els.viewerMaxBtn) {
+      els.viewerMaxBtn.innerHTML = '<i class="bi bi-fullscreen-exit"></i>';
+      els.viewerMaxBtn.title = "이전 크기로 복원";
+    }
+  } else {
+    resetFloatingDockPosition();
+  }
+  // Re-render current page to adjust canvas fit
+  renderViewerPage(docViewerState.currentPage);
+}
+
 function initDocViewerEvents() {
+  initFloatingWindowControls();
+
   if (els.openDocViewerBtn) {
     els.openDocViewerBtn.addEventListener("click", function () {
       openDocViewer(currentActiveSampleIndex || 1);
@@ -1701,10 +1914,6 @@ function initDocViewerEvents() {
 
   if (els.viewerCloseBtn) {
     els.viewerCloseBtn.addEventListener("click", closeDocViewer);
-  }
-
-  if (els.docViewerBackdrop) {
-    els.docViewerBackdrop.addEventListener("click", closeDocViewer);
   }
 
   if (els.viewerPrevPageBtn) {
@@ -1770,7 +1979,7 @@ function initDocViewerEvents() {
 
   // Keyboard Navigation: ESC to close, Left/Right or PageUp/PageDown to navigate
   document.addEventListener("keydown", function (e) {
-    if (!els.docViewerModal || els.docViewerModal.style.display === "none") return;
+    if (!els.docViewerFloating || els.docViewerFloating.style.display === "none") return;
 
     if (e.key === "Escape") {
       closeDocViewer();
@@ -1801,15 +2010,12 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
   docViewerState.sampleIdx = sIdx;
   var reg = SAMPLE_DOC_REGISTRY[sIdx];
 
-  // Open Modal
-  if (els.docViewerModal) {
-    els.docViewerModal.style.display = "flex";
-    setTimeout(function () {
-      els.docViewerModal.classList.add("open");
-    }, 10);
+  // Open Modeless Floating Window
+  if (els.docViewerFloating) {
+    els.docViewerFloating.style.display = "flex";
   }
 
-  // Setup Quick Nav
+  // Setup Quick Nav Tabs
   renderQuickNavTabs(sIdx);
 
   var pageToOpen = targetPage || 1;
@@ -1845,11 +2051,8 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
 }
 
 function closeDocViewer() {
-  if (!els.docViewerModal) return;
-  els.docViewerModal.classList.remove("open");
-  setTimeout(function () {
-    els.docViewerModal.style.display = "none";
-  }, 250);
+  if (!els.docViewerFloating) return;
+  els.docViewerFloating.style.display = "none";
 }
 
 function renderQuickNavTabs(sampleIdx) {
@@ -1870,6 +2073,9 @@ function renderQuickNavTabs(sampleIdx) {
   btns.forEach(function (btn) {
     btn.addEventListener("click", function () {
       var p = parseInt(this.getAttribute("data-page"), 10);
+      // Quick Nav 탭 클릭 시에는 이전 타겟 하이라이트를 깔끔하게 해제
+      docViewerState.targetBox = null;
+      docViewerState.targetLabel = "";
       renderViewerPage(p);
     });
   });
@@ -1907,6 +2113,7 @@ function renderViewerPage(pageNum, targetBox, targetLabel) {
     els.viewerDocTitle.textContent = currentSec ? currentSec.title : ("서류 페이지 " + pageNum);
   }
 
+  // 🌟 Quick Nav 활성 탭 표시 동기화
   if (els.docQuickNav) {
     var qBtns = els.docQuickNav.querySelectorAll(".quick-doc-btn");
     qBtns.forEach(function (b) {
@@ -1916,6 +2123,7 @@ function renderViewerPage(pageNum, targetBox, targetLabel) {
     });
   }
 
+  // 타겟 하이라이트 배너 표시 제어
   if (docViewerState.targetBox && docViewerState.targetLabel) {
     if (els.viewerHighlightBanner) els.viewerHighlightBanner.style.display = "flex";
     if (els.viewerHighlightTargetText) els.viewerHighlightTargetText.textContent = "하이라이트: " + docViewerState.targetLabel;
@@ -1931,7 +2139,7 @@ function renderViewerPage(pageNum, targetBox, targetLabel) {
   }
 
   docViewerState.pdfDoc.getPage(pageNum).then(function (page) {
-    var scale = docViewerState.zoom || 1.2;
+    var scale = docViewerState.zoom || 1.1;
     var viewport = page.getViewport({ scale: scale });
 
     var canvas = els.pdfCanvas;
@@ -1966,46 +2174,10 @@ function renderHighlightLayer(pageNum) {
 
   if (!docViewerState.showHighlights) return;
 
-  var reg = SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx] || SAMPLE_DOC_REGISTRY[1];
-  var fieldMap = reg.fieldMap || {};
-
   var targetEl = null;
 
-  for (var k in fieldMap) {
-    if (!Object.prototype.hasOwnProperty.call(fieldMap, k)) continue;
-    var f = fieldMap[k];
-    if (f.page !== pageNum || !f.box) continue;
-
-    var isTarget = false;
-    if (docViewerState.targetBox) {
-      var dx = Math.abs(docViewerState.targetBox.x - f.box.x);
-      var dy = Math.abs(docViewerState.targetBox.y - f.box.y);
-      if (dx < 0.04 && dy < 0.04) {
-        isTarget = true;
-      }
-    }
-
-    var boxDiv = document.createElement("div");
-    boxDiv.className = "highlight-box" + (isTarget ? " target-active" : "");
-    boxDiv.style.left = (f.box.x * 100) + "%";
-    boxDiv.style.top = (f.box.y * 100) + "%";
-    boxDiv.style.width = (f.box.width * 100) + "%";
-    boxDiv.style.height = (f.box.height * 100) + "%";
-    boxDiv.setAttribute("title", f.label + (f.text ? " : " + f.text : ""));
-
-    if (isTarget) {
-      var l = document.createElement("span");
-      l.className = "highlight-box-label";
-      l.textContent = f.label;
-      boxDiv.appendChild(l);
-      targetEl = boxDiv;
-    }
-
-    els.highlightLayer.appendChild(boxDiv);
-  }
-
-  // If custom targetBox is on this page but not yet rendered
-  if (docViewerState.targetBox && !targetEl) {
+  // If targetBox is on this page, render it with glowing animation
+  if (docViewerState.targetBox) {
     var b = docViewerState.targetBox;
     var customDiv = document.createElement("div");
     customDiv.className = "highlight-box target-active";
@@ -2029,41 +2201,60 @@ function renderHighlightLayer(pageNum) {
   if (targetEl && els.docViewerBody) {
     setTimeout(function () {
       targetEl.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-    }, 180);
+    }, 120);
   }
+}
+
+/**
+ * 정교한 서류 종류(docType)와 검토항목(checkItemKey) 복합 매핑 엔진
+ */
+function getDocTarget(sampleIdx, docType, checkItemKey) {
+  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
+  var defaultPage = (reg.docPages && reg.docPages[docType]) || 1;
+
+  // 1. [docType]::[checkItemKey] 복합 매핑 탐색
+  if (docType && checkItemKey) {
+    var comboKey = docType + "::" + checkItemKey;
+    if (reg.docFieldMap && reg.docFieldMap[comboKey]) {
+      return reg.docFieldMap[comboKey];
+    }
+  }
+
+  // 2. 단독 checkItemKey 매핑 탐색 (Document Keys 카드 등)
+  if (checkItemKey && reg.fieldMap && reg.fieldMap[checkItemKey]) {
+    var f = reg.fieldMap[checkItemKey];
+    // docType이 주어지지 않았거나, 일치하는 페이지인 경우
+    if (!docType || f.page === defaultPage) {
+      return f;
+    }
+  }
+
+  // 3. 일치하는 하이라이트 박스가 없는 경우: 서류 대표 페이지로 가되, 하이라이트 박스는 null (이전 하이라이트 잔상 제거)
+  return {
+    page: defaultPage,
+    box: null,
+    label: ""
+  };
 }
 
 function openDocViewerWithField(fieldKey) {
   var sIdx = currentActiveSampleIndex || 1;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
-  var f = reg.fieldMap && reg.fieldMap[fieldKey];
-
-  if (f) {
-    openDocViewer(sIdx, f.page, f.box, f.label);
-  } else {
-    openDocViewer(sIdx, 1, null, fieldKey);
-  }
+  var target = getDocTarget(sIdx, null, fieldKey);
+  openDocViewer(sIdx, target.page, target.box, target.label || fieldKey);
 }
 
 function openDocViewerWithCheckItem(checkItemKey, docType) {
   var sIdx = currentActiveSampleIndex || 1;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
-  var f = reg.fieldMap && reg.fieldMap[checkItemKey];
-
-  if (f) {
-    openDocViewer(sIdx, f.page, f.box, f.label);
-  } else if (docType && reg.docPages && reg.docPages[docType]) {
-    openDocViewer(sIdx, reg.docPages[docType], null, docType);
-  } else {
-    openDocViewer(sIdx, 1, null, checkItemKey);
-  }
+  var target = getDocTarget(sIdx, docType, checkItemKey);
+  openDocViewer(sIdx, target.page, target.box, target.label);
 }
 
 function openDocViewerForDoc(docKey) {
   var sIdx = currentActiveSampleIndex || 1;
   var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
   var page = (reg.docPages && reg.docPages[docKey]) ? reg.docPages[docKey] : 1;
-  openDocViewer(sIdx, page, null, docKey);
+  openDocViewer(sIdx, page, null, null);
 }
 
 document.addEventListener("DOMContentLoaded", init);

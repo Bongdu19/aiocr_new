@@ -1625,22 +1625,28 @@ var SAMPLE_DOC_REGISTRY = {
     // [docType]::[checkItemKey] 서류별 세부 바운딩 박스 매핑
     docFieldMap: {
       // L/C 번호
+      "lc::lc_number": { page: 1, label: "인수통지 L/C 번호", box: { x: 0.03, y: 0.32, width: 0.22, height: 0.03 } },
+      "lc::lc_number_consistency": { page: 1, label: "인수통지 L/C 번호", box: { x: 0.03, y: 0.32, width: 0.22, height: 0.03 } },
       "invoice::lc_number": { page: 3, label: "송장 내 L/C 번호", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
       "invoice::lc_number_consistency": { page: 3, label: "송장 내 L/C 번호", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
       "bl::lc_number": { page: 6, label: "B/L 첨부 내 L/C 번호 (오인 위치)", box: { x: 0.33, y: 0.425, width: 0.24, height: 0.03 } },
       "bl::lc_number_consistency": { page: 6, label: "B/L 첨부 내 L/C 번호 (오인 위치)", box: { x: 0.33, y: 0.425, width: 0.24, height: 0.03 } },
       "packing_list::lc_number": { page: 4, label: "패킹리스트 내 L/C 번호", box: { x: 0.40, y: 0.295, width: 0.22, height: 0.03 } },
+      "packing_list::lc_number_consistency": { page: 4, label: "패킹리스트 내 L/C 번호", box: { x: 0.40, y: 0.295, width: 0.22, height: 0.03 } },
       "insurance::lc_number": { page: 7, label: "보험증권 내 L/C 번호", box: { x: 0.05, y: 0.455, width: 0.22, height: 0.03 } },
+      "insurance::lc_number_consistency": { page: 7, label: "보험증권 내 L/C 번호", box: { x: 0.05, y: 0.455, width: 0.22, height: 0.03 } },
 
       // 송장 번호
       "invoice::invoice_number": { page: 3, label: "상업송장 번호", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
       "invoice::invoice_number_consistency": { page: 3, label: "상업송장 번호", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
       "insurance::invoice_number": { page: 7, label: "보험증권 내 송장 참조", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
+      "insurance::invoice_number_consistency": { page: 7, label: "보험증권 내 송장 참조", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
 
       // B/L 번호
       "bl::bl_number": { page: 5, label: "B/L 번호", box: { x: 0.76, y: 0.055, width: 0.19, height: 0.028 } },
       "bl::bl_number_consistency": { page: 5, label: "B/L 번호", box: { x: 0.76, y: 0.055, width: 0.19, height: 0.028 } },
       "lc::bl_number": { page: 1, label: "인수통지서 내 B/L 번호", box: { x: 0.30, y: 0.33, width: 0.20, height: 0.03 } },
+      "lc::bl_number_consistency": { page: 1, label: "인수통지서 내 B/L 번호", box: { x: 0.30, y: 0.33, width: 0.20, height: 0.03 } },
 
       // 보험 증권번호
       "insurance::policy_certificate_number": { page: 7, label: "보험증권 번호", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
@@ -1720,33 +1726,42 @@ var SAMPLE_DOC_REGISTRY = {
       "invoice::lc_number": { page: 2, label: "송장 내 L/C 번호", box: { x: 0.17, y: 0.495, width: 0.24, height: 0.026 } },
       "invoice::lc_number_consistency": { page: 2, label: "송장 내 L/C 번호", box: { x: 0.17, y: 0.495, width: 0.24, height: 0.026 } },
       "packing_list::lc_number": { page: 4, label: "패킹 내 L/C 번호", box: { x: 0.21, y: 0.51, width: 0.20, height: 0.026 } },
+      "packing_list::lc_number_consistency": { page: 4, label: "패킹 내 L/C 번호", box: { x: 0.21, y: 0.51, width: 0.20, height: 0.026 } },
+      "bl::lc_number": { page: 8, label: "B/L 내 L/C 번호", box: { x: 0.15, y: 0.515, width: 0.22, height: 0.026 } },
+      "bl::lc_number_consistency": { page: 8, label: "B/L 내 L/C 번호", box: { x: 0.15, y: 0.515, width: 0.22, height: 0.026 } },
       "insurance::lc_number": { page: 10, label: "보험 내 L/C 번호", box: { x: 0.48, y: 0.27, width: 0.18, height: 0.025 } },
+      "insurance::lc_number_consistency": { page: 10, label: "보험 내 L/C 번호", box: { x: 0.48, y: 0.27, width: 0.18, height: 0.025 } },
 
       // 송장 번호
       "invoice::invoice_number": { page: 2, label: "송장 번호", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
       "invoice::invoice_number_consistency": { page: 2, label: "송장 번호", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
       "packing_list::invoice_number": { page: 4, label: "패킹 내 송장 참조", box: { x: 0.55, y: 0.08, width: 0.16, height: 0.026 } },
+      "packing_list::invoice_number_consistency": { page: 4, label: "패킹 내 송장 참조", box: { x: 0.55, y: 0.08, width: 0.16, height: 0.026 } },
       "insurance::invoice_number": { page: 10, label: "보험 내 송장 참조", box: { x: 0.42, y: 0.125, width: 0.15, height: 0.025 } },
+      "insurance::invoice_number_consistency": { page: 10, label: "보험 내 송장 참조", box: { x: 0.42, y: 0.125, width: 0.15, height: 0.025 } },
 
       // B/L 번호
       "bl::bl_number": { page: 8, label: "B/L 번호", box: { x: 0.72, y: 0.055, width: 0.21, height: 0.03 } },
       "bl::bl_number_consistency": { page: 8, label: "B/L 번호", box: { x: 0.72, y: 0.055, width: 0.21, height: 0.03 } },
       "lc::bl_number": { page: 1, label: "도착통지서 B/L 번호", box: { x: 0.52, y: 0.27, width: 0.14, height: 0.028 } },
+      "lc::bl_number_consistency": { page: 1, label: "도착통지서 B/L 번호", box: { x: 0.52, y: 0.27, width: 0.14, height: 0.028 } },
 
       // 보험증권 번호
       "insurance::policy_certificate_number": { page: 10, label: "보험증권 번호", box: { x: 0.07, y: 0.175, width: 0.19, height: 0.032 } },
 
       // 당사자 정보
       "invoice::seller_party_consistency": { page: 2, label: "송장 수출자 (Mitsubishi Electric)", box: { x: 0.03, y: 0.055, width: 0.38, height: 0.035 } },
+      "packing_list::seller_party_consistency": { page: 4, label: "패킹 수출자 (Mitsubishi Electric)", box: { x: 0.03, y: 0.055, width: 0.38, height: 0.035 } },
       "bl::seller_party_consistency": { page: 8, label: "B/L 송하인 (Shipper)", box: { x: 0.03, y: 0.055, width: 0.35, height: 0.035 } },
       "insurance::seller_party_consistency": { page: 10, label: "보험 피보험자 (Assured)", box: { x: 0.04, y: 0.135, width: 0.35, height: 0.025 } },
 
       "invoice::buyer_party_consistency": { page: 2, label: "송장 바이어 (Hyundai Rotem)", box: { x: 0.03, y: 0.125, width: 0.32, height: 0.04 } },
-      "bl::buyer_party_consistency": { page: 8, label: "B/L 통지처 (Notify Party)", box: { x: 0.03, y: 0.22, width: 0.35, height: 0.04 } },
       "packing_list::buyer_party_consistency": { page: 4, label: "패킹 바이어 (Buyer)", box: { x: 0.04, y: 0.135, width: 0.30, height: 0.04 } },
+      "bl::buyer_party_consistency": { page: 8, label: "B/L 통지처 (Notify Party)", box: { x: 0.03, y: 0.22, width: 0.35, height: 0.04 } },
 
       // 물품 및 조건
       "invoice::goods_description": { page: 2, label: "송장 품명 명세", box: { x: 0.17, y: 0.375, width: 0.50, height: 0.035 } },
+      "packing_list::goods_description": { page: 4, label: "패킹 품명 명세", box: { x: 0.17, y: 0.38, width: 0.50, height: 0.035 } },
       "bl::goods_description": { page: 9, label: "B/L 첨부 품명", box: { x: 0.16, y: 0.20, width: 0.50, height: 0.035 } },
       "insurance::goods_description": { page: 10, label: "보험 품명 명세", box: { x: 0.06, y: 0.46, width: 0.45, height: 0.035 } },
 
@@ -2184,7 +2199,7 @@ function renderHighlightLayer(pageNum) {
       if (!Object.prototype.hasOwnProperty.call(reg.docFieldMap, k)) continue;
       var item = reg.docFieldMap[k];
       if (item && item.page === pageNum && item.box) {
-        var coordKey = Math.round(item.box.x * 100) + "_" + Math.round(item.box.y * 100);
+        var coordKey = Math.round(item.box.x * 1000) + "_" + Math.round(item.box.y * 1000);
         if (!seenCoords[coordKey]) {
           seenCoords[coordKey] = true;
           pageBoxes.push({
@@ -2203,7 +2218,7 @@ function renderHighlightLayer(pageNum) {
       if (!Object.prototype.hasOwnProperty.call(reg.fieldMap, fk)) continue;
       var fItem = reg.fieldMap[fk];
       if (fItem && fItem.page === pageNum && fItem.box) {
-        var fCoordKey = Math.round(fItem.box.x * 100) + "_" + Math.round(fItem.box.y * 100);
+        var fCoordKey = Math.round(fItem.box.x * 1000) + "_" + Math.round(fItem.box.y * 1000);
         if (!seenCoords[fCoordKey]) {
           seenCoords[fCoordKey] = true;
           pageBoxes.push({
@@ -2216,22 +2231,31 @@ function renderHighlightLayer(pageNum) {
     }
   }
 
-  var targetEl = null;
-  var targetRendered = false;
+  // 🌟 3. targetBox와 가장 일치하는 "단 1개의 베스트 박스" 인덱스 선별 (오버랩 같이 찍히는 현상 원천 차단)
+  var bestTargetIdx = -1;
+  var minDistance = 0.022; // 2.2% 이내로 엄격히 제한
 
-  // 3. 수집된 모든 박스 렌더링: 타깃이면 파란색(target-active), 기본은 노란색(highlight-box)
-  pageBoxes.forEach(function (pb) {
-    var b = pb.box;
-    var isTarget = false;
+  if (docViewerState.targetBox) {
+    var tx = docViewerState.targetBox.x;
+    var ty = docViewerState.targetBox.y;
 
-    if (docViewerState.targetBox) {
-      var dx = Math.abs(docViewerState.targetBox.x - b.x);
-      var dy = Math.abs(docViewerState.targetBox.y - b.y);
-      if (dx < 0.05 && dy < 0.05) {
-        isTarget = true;
-        targetRendered = true;
+    pageBoxes.forEach(function (pb, idx) {
+      var bx = pb.box.x;
+      var by = pb.box.y;
+      var dist = Math.hypot(tx - bx, ty - by);
+      if (dist < minDistance) {
+        minDistance = dist;
+        bestTargetIdx = idx;
       }
-    }
+    });
+  }
+
+  var targetEl = null;
+
+  // 4. 수집된 모든 박스 렌더링: 오직 bestTargetIdx 1개만 파란색(target-active), 나머지는 모두 노란색
+  pageBoxes.forEach(function (pb, idx) {
+    var b = pb.box;
+    var isTarget = (idx === bestTargetIdx);
 
     var boxDiv = document.createElement("div");
     boxDiv.className = "highlight-box" + (isTarget ? " target-active" : "");
@@ -2265,7 +2289,7 @@ function renderHighlightLayer(pageNum) {
       });
     }
 
-    // 박스 클릭 시 파란색 타깃으로 전환
+    // 박스 직접 클릭 시 파란색 타깃으로 전환
     boxDiv.addEventListener("click", function (e) {
       e.stopPropagation();
       docViewerState.targetBox = b;
@@ -2278,8 +2302,8 @@ function renderHighlightLayer(pageNum) {
     els.highlightLayer.appendChild(boxDiv);
   });
 
-  // 4. 만약 targetBox가 목록에 없는 임의 위치라면, 파란색 타깃으로 추가 렌더링
-  if (docViewerState.targetBox && !targetRendered) {
+  // 5. 만약 targetBox가 목록에 없는 임의 위치라면, 파란색 타깃으로 단독 1개 추가 렌더링
+  if (docViewerState.targetBox && bestTargetIdx === -1) {
     var tb = docViewerState.targetBox;
     var customDiv = document.createElement("div");
     customDiv.className = "highlight-box target-active";
@@ -2310,29 +2334,66 @@ function renderHighlightLayer(pageNum) {
 /**
  * 정교한 서류 종류(docType)와 검토항목(checkItemKey) 복합 매핑 엔진
  */
+function normalizeDocType(docType) {
+  if (!docType) return "";
+  var d = String(docType).toLowerCase();
+  if (d === "commercial_invoice" || d === "inv" || d === "invoice") return "invoice";
+  if (d === "bill_of_lading" || d === "bl") return "bl";
+  if (d === "marine_cargo_insurance" || d === "ins" || d === "insurance") return "insurance";
+  if (d === "certificate_of_origin" || d === "coo") return "coo";
+  if (d === "packing" || d === "pack" || d === "pk" || d === "packing_list") return "packing_list";
+  if (d === "lc" || d === "letter_of_credit") return "lc";
+  return d;
+}
+
 function getDocTarget(sampleIdx, docType, checkItemKey) {
   var sIdx = sampleIdx || currentActiveSampleIndex || 1;
   var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
-  var defaultPage = (reg.docPages && reg.docPages[docType]) || 1;
+  var normDoc = normalizeDocType(docType);
+  var defaultPage = (normDoc && reg.docPages && reg.docPages[normDoc]) ? reg.docPages[normDoc] : 1;
 
-  // 1. [docType]::[checkItemKey] 복합 매핑 탐색
-  if (docType && checkItemKey) {
-    var comboKey = docType + "::" + checkItemKey;
-    if (reg.docFieldMap && reg.docFieldMap[comboKey]) {
-      return reg.docFieldMap[comboKey];
+  if (normDoc && checkItemKey) {
+    // 1-1. 직접 매칭 (예: packing_list::lc_number_consistency)
+    var directKey = normDoc + "::" + checkItemKey;
+    if (reg.docFieldMap && reg.docFieldMap[directKey]) {
+      return reg.docFieldMap[directKey];
+    }
+
+    // 1-2. _consistency 접미사 제거한 baseKey 매칭 (예: packing_list::lc_number)
+    var baseKey = checkItemKey.replace(/_consistency$/, "");
+    var baseCombo = normDoc + "::" + baseKey;
+    if (reg.docFieldMap && reg.docFieldMap[baseCombo]) {
+      return reg.docFieldMap[baseCombo];
+    }
+
+    // 1-3. _vs_ 비교식 키 매칭 (예: bl_shipment_date_vs_latest_shipment -> bl_shipment_date)
+    if (checkItemKey.indexOf("_vs_") >= 0) {
+      var splitKey = checkItemKey.split("_vs_")[0];
+      var splitCombo = normDoc + "::" + splitKey;
+      if (reg.docFieldMap && reg.docFieldMap[splitCombo]) {
+        return reg.docFieldMap[splitCombo];
+      }
     }
   }
 
   // 2. 단독 checkItemKey 매핑 탐색 (Document Keys 카드 등)
-  if (checkItemKey && reg.fieldMap && reg.fieldMap[checkItemKey]) {
-    var f = reg.fieldMap[checkItemKey];
-    // docType이 주어지지 않았거나, 일치하는 페이지인 경우
-    if (!docType || f.page === defaultPage) {
-      return f;
+  if (checkItemKey && reg.fieldMap) {
+    if (reg.fieldMap[checkItemKey]) {
+      var f = reg.fieldMap[checkItemKey];
+      if (!normDoc || f.page === defaultPage) {
+        return f;
+      }
+    }
+    var baseOnly = checkItemKey.replace(/_consistency$/, "");
+    if (reg.fieldMap[baseOnly]) {
+      var fBase = reg.fieldMap[baseOnly];
+      if (!normDoc || fBase.page === defaultPage) {
+        return fBase;
+      }
     }
   }
 
-  // 3. 일치하는 하이라이트 박스가 없는 경우: 서류 대표 페이지로 가되, 하이라이트 박스는 null (이전 하이라이트 잔상 제거)
+  // 3. 일치하는 하이라이트 박스가 없는 경우: 서류 대표 페이지로 가되, 하이라이트 박스는 null
   return {
     page: defaultPage,
     box: null,

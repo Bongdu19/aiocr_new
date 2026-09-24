@@ -1729,8 +1729,8 @@ var SAMPLE_DOC_REGISTRY = {
       "packing_list::lc_number_consistency": { page: 4, label: "패킹 내 L/C 번호", box: { x: 0.21, y: 0.51, width: 0.20, height: 0.026 } },
       "bl::lc_number": { page: 8, label: "B/L 내 L/C 번호", box: { x: 0.15, y: 0.515, width: 0.22, height: 0.026 } },
       "bl::lc_number_consistency": { page: 8, label: "B/L 내 L/C 번호", box: { x: 0.15, y: 0.515, width: 0.22, height: 0.026 } },
-      "insurance::lc_number": { page: 10, label: "보험 내 L/C 번호", box: { x: 0.48, y: 0.27, width: 0.18, height: 0.025 } },
-      "insurance::lc_number_consistency": { page: 10, label: "보험 내 L/C 번호", box: { x: 0.48, y: 0.27, width: 0.18, height: 0.025 } },
+      "insurance::lc_number": { page: 10, label: "보험 내 L/C 번호", box: { x: 0.465, y: 0.252, width: 0.20, height: 0.018 } },
+      "insurance::lc_number_consistency": { page: 10, label: "보험 내 L/C 번호", box: { x: 0.465, y: 0.252, width: 0.20, height: 0.018 } },
 
       // 송장 번호
       "invoice::invoice_number": { page: 2, label: "송장 번호", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
@@ -1757,7 +1757,8 @@ var SAMPLE_DOC_REGISTRY = {
 
       "invoice::buyer_party_consistency": { page: 2, label: "송장 바이어 (Hyundai Rotem)", box: { x: 0.03, y: 0.125, width: 0.32, height: 0.04 } },
       "packing_list::buyer_party_consistency": { page: 4, label: "패킹 바이어 (Buyer)", box: { x: 0.04, y: 0.135, width: 0.30, height: 0.04 } },
-      "bl::buyer_party_consistency": { page: 8, label: "B/L 통지처 (Notify Party)", box: { x: 0.03, y: 0.22, width: 0.35, height: 0.04 } },
+      "bl::buyer_party_consistency": { page: 8, label: "B/L 수하인 (The Korea Development Bank)", box: { x: 0.03, y: 0.155, width: 0.35, height: 0.045 } },
+      "bl::notify_party": { page: 8, label: "B/L 통지처 (Hyundai Rotem)", box: { x: 0.03, y: 0.22, width: 0.35, height: 0.04 } },
 
       // 물품 및 조건
       "invoice::goods_description": { page: 2, label: "송장 품명 명세", box: { x: 0.17, y: 0.375, width: 0.50, height: 0.035 } },
@@ -1769,7 +1770,7 @@ var SAMPLE_DOC_REGISTRY = {
       "invoice::package_count_consistency": { page: 2, label: "송장 포장 수량 (Total: 4 Cases)", box: { x: 0.02, y: 0.835, width: 0.16, height: 0.025 } },
       "packing_list::package_count_consistency": { page: 4, label: "패킹 수량 (Total: 4 Cases)", box: { x: 0.02, y: 0.835, width: 0.18, height: 0.03 } },
       "bl::package_count_consistency": { page: 8, label: "B/L 수량 (4 CASES)", box: { x: 0.40, y: 0.435, width: 0.12, height: 0.025 } },
-      "insurance::package_count_consistency": { page: 10, label: "보험 수량 (4 CASES)", box: { x: 0.43, y: 0.285, width: 0.14, height: 0.025 } },
+      "insurance::package_count_consistency": { page: 10, label: "보험 수량 (4 CASES)", box: { x: 0.465, y: 0.268, width: 0.16, height: 0.018 } },
 
       "packing_list::gross_weight_consistency": { page: 4, label: "패킹 총중량 (4,756 kgs)", box: { x: 0.73, y: 0.565, width: 0.13, height: 0.028 } },
       "bl::gross_weight_consistency": { page: 8, label: "B/L 총중량 (4.756.00)", box: { x: 0.71, y: 0.435, width: 0.12, height: 0.025 } },
@@ -1799,14 +1800,27 @@ var SAMPLE_DOC_REGISTRY = {
       "packing_list::incoterms_consistency": { page: 4, label: "패킹 인도조건 (CIF INCOTERMS 2010)", box: { x: 0.17, y: 0.435, width: 0.24, height: 0.022 } },
       "insurance::incoterms_consistency": { page: 10, label: "보험 인도조건 (CIF INCOTERMS 2010)", box: { x: 0.06, y: 0.525, width: 0.28, height: 0.022 } },
 
-      "invoice::payment_terms_consistency": { page: 2, label: "송장 결제조건 (L/C at sight)", box: { x: 0.51, y: 0.305, width: 0.14, height: 0.022 } },
-      "packing_list::payment_terms_consistency": { page: 4, label: "패킹 결제조건 (L/C at sight)", box: { x: 0.51, y: 0.305, width: 0.14, height: 0.022 } },
+      "invoice::payment_terms_consistency": { page: 2, label: "송장 결제조건 (L/C at sight)", box: { x: 0.525, y: 0.288, width: 0.12, height: 0.018 } },
+      "packing_list::payment_terms_consistency": { page: 4, label: "패킹 결제조건 (L/C at sight)", box: { x: 0.525, y: 0.288, width: 0.12, height: 0.018 } },
 
+      // 선적일 및 날짜 검증 일치성
       "bl::bl_shipment_date": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
-      "bl::bl_shipment_date_vs_latest_shipment": { page: 8, label: "B/L 선적일", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
+      "bl::bl_shipment_date_vs_latest_shipment": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
+      "invoice::bl_shipment_date_vs_latest_shipment": { page: 2, label: "송장 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
+      "packing_list::bl_shipment_date_vs_latest_shipment": { page: 4, label: "패킹 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
+      "insurance::bl_shipment_date_vs_latest_shipment": { page: 10, label: "보험증권 발행일 (MAY 01, 2015)", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } },
+
       "insurance::insurance_policy_issue_date": { page: 10, label: "보험증권 발행일 (MAY 01, 2015)", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } },
-      "insurance::insurance_policy_issue_date_vs_shipment_date": { page: 10, label: "보험증권 발행일", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } },
-      "lc::date_flow_timeline": { page: 1, label: "도착통지일 (2015/05/18)", box: { x: 0.02, y: 0.265, width: 0.12, height: 0.03 } }
+      "insurance::insurance_policy_issue_date_vs_shipment_date": { page: 10, label: "보험증권 발행일 (MAY 01, 2015)", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } },
+      "bl::insurance_policy_issue_date_vs_shipment_date": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
+      "invoice::insurance_policy_issue_date_vs_shipment_date": { page: 2, label: "송장 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
+      "packing_list::insurance_policy_issue_date_vs_shipment_date": { page: 4, label: "패킹 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
+
+      "lc::date_flow_timeline": { page: 1, label: "도착통지일 (2015/05/18)", box: { x: 0.02, y: 0.265, width: 0.12, height: 0.03 } },
+      "invoice::date_flow_timeline": { page: 2, label: "송장 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
+      "packing_list::date_flow_timeline": { page: 4, label: "패킹 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
+      "bl::date_flow_timeline": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
+      "insurance::date_flow_timeline": { page: 10, label: "보험증권 발행일 (MAY 01, 2015)", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } }
     }
   }
 };

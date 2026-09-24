@@ -1766,6 +1766,7 @@ var SAMPLE_DOC_REGISTRY = {
       "insurance::goods_description": { page: 10, label: "보험 품명 명세", box: { x: 0.06, y: 0.46, width: 0.45, height: 0.035 } },
 
       // 중량 및 포장
+      "invoice::package_count_consistency": { page: 2, label: "송장 포장 수량 (Total: 4 Cases)", box: { x: 0.02, y: 0.835, width: 0.16, height: 0.025 } },
       "packing_list::package_count_consistency": { page: 4, label: "패킹 수량 (Total: 4 Cases)", box: { x: 0.02, y: 0.835, width: 0.18, height: 0.03 } },
       "bl::package_count_consistency": { page: 8, label: "B/L 수량 (4 CASES)", box: { x: 0.40, y: 0.435, width: 0.12, height: 0.025 } },
       "insurance::package_count_consistency": { page: 10, label: "보험 수량 (4 CASES)", box: { x: 0.43, y: 0.285, width: 0.14, height: 0.025 } },
@@ -1775,6 +1776,12 @@ var SAMPLE_DOC_REGISTRY = {
 
       "packing_list::measurement_cbm_consistency": { page: 4, label: "패킹 CBM (22.948 M3)", box: { x: 0.85, y: 0.565, width: 0.13, height: 0.028 } },
       "bl::measurement_cbm_consistency": { page: 8, label: "B/L CBM (22.948)", box: { x: 0.84, y: 0.435, width: 0.12, height: 0.025 } },
+
+      // 선명 / 항차 정보 일치성 (vessel_voyage_consistency)
+      "invoice::vessel_voyage_consistency": { page: 2, label: "송장 선명 (SEONG HEE)", box: { x: 0.04, y: 0.278, width: 0.12, height: 0.022 } },
+      "packing_list::vessel_voyage_consistency": { page: 4, label: "패킹 선명 (SEONG HEE)", box: { x: 0.04, y: 0.278, width: 0.12, height: 0.022 } },
+      "bl::vessel_voyage_consistency": { page: 8, label: "B/L 선명/항차 (SEONG HEE / 037)", box: { x: 0.03, y: 0.305, width: 0.28, height: 0.025 } },
+      "insurance::vessel_voyage_consistency": { page: 10, label: "보험 선명 (SEONG HEE)", box: { x: 0.04, y: 0.38, width: 0.12, height: 0.025 } },
 
       // 운송 및 날짜
       "invoice::port_of_loading": { page: 2, label: "송장 선적항 (Shimonoseki)", box: { x: 0.04, y: 0.305, width: 0.22, height: 0.025 } },

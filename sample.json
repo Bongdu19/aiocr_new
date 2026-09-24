@@ -401,6 +401,14 @@
             "marine_cargo_insurance": {
               "field_name": "port_of_loading",
               "value": "SHIMONOSEKI SEAPORT, JAPAN"
+            },
+            "commercial_invoice": {
+              "field_name": "port_of_loading",
+              "value": "Shimonoseki seaport, Japan"
+            },
+            "packing_list": {
+              "field_name": "port_of_loading",
+              "value": "Shimonoseki seaport, Japan"
             }
           }
         },
@@ -414,6 +422,14 @@
             "marine_cargo_insurance": {
               "field_name": "port_of_discharge",
               "value": "BUSAN SEAPORT, SOUTH KOREA"
+            },
+            "commercial_invoice": {
+              "field_name": "port_of_discharge",
+              "value": "Busan seaport, South Korea"
+            },
+            "packing_list": {
+              "field_name": "port_of_discharge",
+              "value": "Busan seaport, South Korea"
             }
           }
         },
@@ -452,6 +468,57 @@
             "other_document": {
               "field_name": "document_date",
               "value": "2015-05-18"
+            }
+          }
+        },
+        {
+          "check_item": "goods_description",
+          "documents": {
+            "commercial_invoice": {
+              "field_name": "goods_description",
+              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT / Static Converter / Battery Charger"
+            },
+            "bill_of_lading": {
+              "field_name": "goods_description",
+              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS"
+            },
+            "packing_list": {
+              "field_name": "goods_description",
+              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS"
+            },
+            "marine_cargo_insurance": {
+              "field_name": "goods_description",
+              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS"
+            }
+          }
+        },
+        {
+          "check_item": "package_count_consistency",
+          "documents": {
+            "commercial_invoice": {
+              "field_name": "package_count",
+              "value": "4 Cases"
+            },
+            "bill_of_lading": {
+              "field_name": "package_count",
+              "value": "4 CASES"
+            },
+            "packing_list": {
+              "field_name": "package_count",
+              "value": "4 PKGS"
+            },
+            "marine_cargo_insurance": {
+              "field_name": "package_count",
+              "value": "4 CASES 2 SETS"
+            }
+          }
+        },
+        {
+          "check_item": "bl_shipment_date_vs_latest_shipment",
+          "documents": {
+            "bill_of_lading": {
+              "field_name": "on_board_date",
+              "value": "2015-05-07"
             }
           }
         }
@@ -1157,6 +1224,38 @@
               }
             ]
           }
+        },
+        "commercial_invoice": {
+          "field_name": "port_of_loading",
+          "value": "Shimonoseki seaport, Japan",
+          "confidence": 0.95,
+          "source": {
+            "page": 2,
+            "boxes": [
+              {
+                "x": 0.18,
+                "y": 0.4,
+                "width": 0.3,
+                "height": 0.025
+              }
+            ]
+          }
+        },
+        "packing_list": {
+          "field_name": "port_of_loading",
+          "value": "Shimonoseki seaport, Japan",
+          "confidence": 0.95,
+          "source": {
+            "page": 4,
+            "boxes": [
+              {
+                "x": 0.18,
+                "y": 0.4,
+                "width": 0.3,
+                "height": 0.025
+              }
+            ]
+          }
         }
       }
     },
@@ -1195,6 +1294,38 @@
                 "x": 0.18,
                 "y": 0.545,
                 "width": 0.28,
+                "height": 0.025
+              }
+            ]
+          }
+        },
+        "commercial_invoice": {
+          "field_name": "port_of_discharge",
+          "value": "Busan seaport, South Korea",
+          "confidence": 0.95,
+          "source": {
+            "page": 2,
+            "boxes": [
+              {
+                "x": 0.55,
+                "y": 0.4,
+                "width": 0.3,
+                "height": 0.025
+              }
+            ]
+          }
+        },
+        "packing_list": {
+          "field_name": "port_of_discharge",
+          "value": "Busan seaport, South Korea",
+          "confidence": 0.95,
+          "source": {
+            "page": 4,
+            "boxes": [
+              {
+                "x": 0.55,
+                "y": 0.4,
+                "width": 0.3,
                 "height": 0.025
               }
             ]
@@ -1327,6 +1458,180 @@
                 "x": 0.02,
                 "y": 0.265,
                 "width": 0.12,
+                "height": 0.03
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "check_item": "goods_description",
+      "label": "물품 명세 일치성",
+      "category": "goods",
+      "status": "match",
+      "severity": "info",
+      "message": "확인 가능한 문서 간 물품 명세가 대체로 일치합니다.",
+      "documents": {
+        "commercial_invoice": {
+          "field_name": "goods_description",
+          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT / Static Converter / Battery Charger",
+          "confidence": 0.95,
+          "source": {
+            "page": 2,
+            "boxes": [
+              {
+                "x": 0.18,
+                "y": 0.54,
+                "width": 0.5,
+                "height": 0.05
+              }
+            ]
+          }
+        },
+        "bill_of_lading": {
+          "field_name": "goods_description",
+          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
+          "confidence": 0.95,
+          "source": {
+            "page": 8,
+            "boxes": [
+              {
+                "x": 0.55,
+                "y": 0.47,
+                "width": 0.42,
+                "height": 0.05
+              }
+            ]
+          }
+        },
+        "packing_list": {
+          "field_name": "goods_description",
+          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
+          "confidence": 0.95,
+          "source": {
+            "page": 4,
+            "boxes": [
+              {
+                "x": 0.2,
+                "y": 0.54,
+                "width": 0.5,
+                "height": 0.05
+              }
+            ]
+          }
+        },
+        "marine_cargo_insurance": {
+          "field_name": "goods_description",
+          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
+          "confidence": 0.95,
+          "source": {
+            "page": 10,
+            "boxes": [
+              {
+                "x": 0.15,
+                "y": 0.38,
+                "width": 0.55,
+                "height": 0.05
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "check_item": "package_count_consistency",
+      "label": "포장 수량 일치성",
+      "category": "quantity",
+      "status": "match",
+      "severity": "info",
+      "message": "확인 가능한 문서 간 포장 수량이 일치합니다.",
+      "documents": {
+        "commercial_invoice": {
+          "field_name": "package_count",
+          "value": "4 Cases",
+          "confidence": 0.96,
+          "source": {
+            "page": 2,
+            "boxes": [
+              {
+                "x": 0.03,
+                "y": 0.54,
+                "width": 0.14,
+                "height": 0.03
+              }
+            ]
+          }
+        },
+        "bill_of_lading": {
+          "field_name": "package_count",
+          "value": "4 CASES",
+          "confidence": 0.96,
+          "source": {
+            "page": 8,
+            "boxes": [
+              {
+                "x": 0.69,
+                "y": 0.44,
+                "width": 0.12,
+                "height": 0.028
+              }
+            ]
+          }
+        },
+        "packing_list": {
+          "field_name": "package_count",
+          "value": "4 PKGS",
+          "confidence": 0.96,
+          "source": {
+            "page": 4,
+            "boxes": [
+              {
+                "x": 0.03,
+                "y": 0.54,
+                "width": 0.14,
+                "height": 0.03
+              }
+            ]
+          }
+        },
+        "marine_cargo_insurance": {
+          "field_name": "package_count",
+          "value": "4 CASES 2 SETS",
+          "confidence": 0.95,
+          "source": {
+            "page": 10,
+            "boxes": [
+              {
+                "x": 0.05,
+                "y": 0.38,
+                "width": 0.15,
+                "height": 0.03
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "check_item": "bl_shipment_date_vs_latest_shipment",
+      "label": "선적일 vs 최종선적기한",
+      "category": "date",
+      "status": "unclear",
+      "severity": "warning",
+      "message": "B/L상 본선적재일은 2015-05-07이나 L/C상 최종선적기한 정보가 없어 적합성을 확정할 수 없습니다.",
+      "documents": {
+        "bill_of_lading": {
+          "field_name": "on_board_date",
+          "value": "2015-05-07",
+          "confidence": 0.95,
+          "source": {
+            "page": 8,
+            "boxes": [
+              {
+                "x": 0.18,
+                "y": 0.945,
+                "width": 0.18,
                 "height": 0.03
               }
             ]

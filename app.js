@@ -1033,10 +1033,13 @@ function renderChecklists(documentChecklists) {
           if (!generatedChecklists[docKey]) {
             generatedChecklists[docKey] = [];
           }
+          var valStr = (docItem.value !== null && docItem.value !== undefined) ? String(docItem.value) : '';
+          var msgStr = cr.message ? ' (' + cr.message + ')' : '';
+          var finalDetails = valStr ? (valStr + msgStr) : (cr.message || '');
           generatedChecklists[docKey].push({
             item: cr.label || cr.check_item,
             status: cr.status,
-            details: (docItem.field_name ? '[' + docItem.field_name + '] ' : '') + (docItem.value !== null && docItem.value !== undefined ? String(docItem.value) : '') + (cr.message ? ' (' + cr.message + ')' : ''),
+            details: finalDetails,
             confidence: docItem.confidence
           });
         });

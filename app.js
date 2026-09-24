@@ -5,7 +5,47 @@ var currentJobId = null;
 var currentChecklistData = null;
 var activeChecklistTab = null;
 var currentRawPayload = null;
+var currentCheckItemEvidence = [];
 var els = {};
+
+/**
+ * Code.md v5 Contract Helpers:
+ * 1) getEvidence: 특정 check_item 및 문서 종류(docType)에 대한 근거(Evidence) 탐색
+ * 2) canHighlight: Bounding Box 및 페이지 정보가 유효한지 검증 (page > 0, boxes.length > 0)
+ */
+function getEvidence(checkItem, docType) {
+  if (!currentCheckItemEvidence || !currentCheckItemEvidence.length) return null;
+  var row = currentCheckItemEvidence.find(function (x) {
+    return x && x.check_item === checkItem;
+  });
+  if (!row || !row.documents) return null;
+
+  // 1) 정확한 docType 직접 매칭
+  if (row.documents[docType]) return row.documents[docType];
+
+  // 2) 정규화된 문서 키 매칭 (예: invoice vs commercial_invoice, packing vs packing_list 등)
+  var normDoc = typeof normalizeDocType === "function" ? normalizeDocType(docType) : docType;
+  var keys = Object.keys(row.documents);
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var normK = typeof normalizeDocType === "function" ? normalizeDocType(k) : k;
+    if (normK === normDoc || k.indexOf(normDoc) >= 0 || normDoc.indexOf(k) >= 0) {
+      return row.documents[k];
+    }
+  }
+  return null;
+}
+
+function canHighlight(evidenceDoc) {
+  return !!(
+    evidenceDoc &&
+    evidenceDoc.source &&
+    typeof evidenceDoc.source.page === "number" &&
+    evidenceDoc.source.page > 0 &&
+    Array.isArray(evidenceDoc.source.boxes) &&
+    evidenceDoc.source.boxes.length > 0
+  );
+}
 
 function getEl(id) {
   return document.getElementById(id);
@@ -583,6 +623,49 @@ function renderDateTimeline(dateChecks) {
   els.dateTimeline.innerHTML = html || "날짜 정보 없음";
 }
 
+/**
+ * Code.md v5 Contract:
+ * comparison_matrix의 셀 표시 및 check_item_evidence 기반 하이라이트 여부 판별 헬퍼
+ * - 값은 있으나 위치가 없는 경우(source.page <= 0 등): 값 표시, 클릭 비활성화, "원문 위치 정보 없음"
+ * - 문서 슬롯 자체가 없는 경우: "해당 문서 근거 없음"
+ * - check_item_evidence가 있는 최신 응답: canHighlight 여부에 따라 셀 스타일 및 툴팁 분기
+ * - 레거시 샘플(check_item_evidence 없음): 기존 정적 레지스트리 기반 클릭 지원
+ */
+function buildComparisonCellInfo(itemKey, docKey, docTitle, rawVal) {
+  var evidenceDoc = getEvidence(itemKey, docKey);
+  var hasEvidenceData = currentCheckItemEvidence && currentCheckItemEvidence.length > 0;
+
+  var canClick = true;
+  var tooltip = "클릭 시 " + docTitle + " 위치 확인";
+  var cellClass = "clickable-cell";
+  var displayVal = rawVal;
+
+  if (hasEvidenceData) {
+    if (evidenceDoc && canHighlight(evidenceDoc)) {
+      canClick = true;
+      cellClass = "clickable-cell has-evidence";
+      tooltip = "클릭 시 " + docTitle + " 원문 위치 확인 (p." + evidenceDoc.source.page + ")";
+      if (!displayVal && evidenceDoc.value) displayVal = evidenceDoc.value;
+    } else if (evidenceDoc) {
+      canClick = false;
+      cellClass = "non-clickable-cell no-location";
+      tooltip = "원문 위치 정보 없음 (값: " + (evidenceDoc.value || "확인됨") + ")";
+      if (!displayVal && evidenceDoc.value) displayVal = evidenceDoc.value;
+    } else {
+      canClick = false;
+      cellClass = "non-clickable-cell no-evidence";
+      tooltip = "해당 문서 근거 없음";
+    }
+  }
+
+  return {
+    canClick: canClick,
+    cellClass: cellClass,
+    tooltip: tooltip,
+    htmlVal: formatTableCellHtml(displayVal)
+  };
+}
+
 function renderComparisonTable(rows) {
   var html = "";
   var cardsHtml = "";
@@ -706,16 +789,25 @@ function renderComparisonTable(rows) {
       var rowClass = rowHighlightClass(row.result);
       var itemTitle = row.check_item_ko || row.check_item || "-";
 
+      var docCols = [
+        { key: "lc", label: "L/C", title: "L/C", val: row.lc },
+        { key: "invoice", label: "송장", title: "상업송장", val: row.commercial_invoice || row.invoice },
+        { key: "bl", label: "B/L", title: "선하증권(B/L)", val: row.bill_of_lading || row.bl },
+        { key: "packing_list", label: "포장", title: "포장명세서", val: row.packing_list },
+        { key: "insurance", label: "보험", title: "해상보험증권", val: row.marine_cargo_insurance || row.insurance },
+        { key: "coo", label: "COO", title: "원산지증명서", val: row.certificate_of_origin || row.coo }
+      ];
+
       // Table Row
       html += '<tr class="' + rowClass + '">';
       html += '<td><strong class="item-title-cell">' + escapeHtml(cleanText(itemTitle)) + '</strong></td>';
       html += '<td class="' + resultCellClass(row.result) + '">' + escapeHtml(koreanStatus(row.result)) + '</td>';
-      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="lc" title="클릭 시 관련 서류 위치 확인">' + formatTableCellHtml(row.lc) + '</td>';
-      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="invoice" title="클릭 시 상업송장 위치 확인">' + formatTableCellHtml(row.commercial_invoice || row.invoice) + '</td>';
-      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="bl" title="클릭 시 선하증권(B/L) 위치 확인">' + formatTableCellHtml(row.bill_of_lading || row.bl) + '</td>';
-      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="packing_list" title="클릭 시 포장명세서 위치 확인">' + formatTableCellHtml(row.packing_list) + '</td>';
-      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="insurance" title="클릭 시 해상보험증권 위치 확인">' + formatTableCellHtml(row.marine_cargo_insurance || row.insurance) + '</td>';
-      html += '<td class="clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="coo" title="클릭 시 원산지증명서 위치 확인">' + formatTableCellHtml(row.certificate_of_origin || row.coo) + '</td>';
+
+      docCols.forEach(function (d) {
+        var cInfo = buildComparisonCellInfo(row.check_item, d.key, d.title, d.val);
+        html += '<td class="' + cInfo.cellClass + '" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="' + d.key + '" title="' + escapeHtml(cInfo.tooltip) + '">' + cInfo.htmlVal + '</td>';
+      });
+
       html += '</tr>';
 
       // Mobile Card Item
@@ -726,19 +818,11 @@ function renderComparisonTable(rows) {
       cardsHtml += '</div>';
       cardsHtml += '<div class="mobile-card-doc-grid">';
 
-      var docs = [
-        { label: "LC", val: row.lc, doc: "lc" },
-        { label: "송장", val: row.commercial_invoice || row.invoice, doc: "invoice" },
-        { label: "B/L", val: row.bill_of_lading || row.bl, doc: "bl" },
-        { label: "포장", val: row.packing_list, doc: "packing_list" },
-        { label: "보험", val: row.marine_cargo_insurance || row.insurance, doc: "insurance" },
-        { label: "COO", val: row.certificate_of_origin || row.coo, doc: "coo" }
-      ];
-
-      docs.forEach(function (d) {
-        cardsHtml += '<div class="mobile-doc-item clickable-cell" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="' + d.doc + '" title="클릭 시 ' + escapeHtml(d.label) + ' 위치 확인">';
+      docCols.forEach(function (d) {
+        var cInfo = buildComparisonCellInfo(row.check_item, d.key, d.label, d.val);
+        cardsHtml += '<div class="mobile-doc-item ' + cInfo.cellClass + '" data-check-item="' + escapeHtml(row.check_item) + '" data-doc="' + d.key + '" title="' + escapeHtml(cInfo.tooltip) + '">';
         cardsHtml += '<span class="mobile-doc-tag">' + escapeHtml(d.label) + '</span>';
-        cardsHtml += '<div class="mobile-doc-val-wrap">' + formatTableCellHtml(d.val) + '</div>';
+        cardsHtml += '<div class="mobile-doc-val-wrap">' + cInfo.htmlVal + '</div>';
         cardsHtml += '</div>';
       });
 
@@ -762,8 +846,8 @@ function renderComparisonTable(rows) {
   }
 
   // Bind click listeners for table & card cells
-  var clickableCells = document.querySelectorAll(".data-table td.clickable-cell, .mobile-matrix-card .clickable-cell");
-  clickableCells.forEach(function (c) {
+  var allDocCells = document.querySelectorAll(".data-table td[data-check-item], .mobile-matrix-card .mobile-doc-item[data-check-item]");
+  allDocCells.forEach(function (c) {
     c.addEventListener("click", function () {
       var itemKey = this.getAttribute("data-check-item");
       var doc = this.getAttribute("data-doc");
@@ -901,6 +985,12 @@ function renderResult(parsed, finalJob) {
   var overall = String(data.overall_status || "").toLowerCase();
   var alertLvl = String(data.overall_alert_level || "").toLowerCase();
 
+  // Code.md v5 Contract: structured_result의 check_item_evidence를 최우선 하이라이트 소스로 저장
+  var structured = (parsed && parsed.structured_result) ? parsed.structured_result : data;
+  currentCheckItemEvidence = (structured && Array.isArray(structured.check_item_evidence))
+    ? structured.check_item_evidence
+    : ((data && Array.isArray(data.check_item_evidence)) ? data.check_item_evidence : []);
+
   currentRawPayload = finalJob || parsed;
   els.rawJson.textContent = JSON.stringify(currentRawPayload, null, 2);
 
@@ -942,7 +1032,9 @@ function renderResult(parsed, finalJob) {
     applyCardTheme(els.alertLevelCard, "card-theme-neutral");
   }
 
-  els.oneLineSummary.textContent = cleanText(data.one_line_summary) || "-";
+  // human_summary 지원 (parsed.human_summary 또는 structured.human_summary 우선)
+  var summaryText = (parsed && parsed.human_summary) || (structured && structured.human_summary) || cleanText(data.one_line_summary) || "-";
+  els.oneLineSummary.textContent = summaryText;
   els.recommendedAction.textContent = cleanText(data.recommended_action) || "-";
 
   if (finalJob) {
@@ -951,9 +1043,9 @@ function renderResult(parsed, finalJob) {
 
   renderDocumentKeys(data.document_keys);
   renderDateTimeline(data.date_checks);
-  rows = data.comparison_matrix || [];
+  rows = (structured && structured.comparison_matrix) || data.comparison_matrix || [];
   renderComparisonTable(rows);
-  renderChecklists(data.document_checklists);
+  renderChecklists(data.document_checklists || (structured && (structured.checklist_results || structured.document_checklists)));
 }
 
 function loadConfig() {
@@ -2440,6 +2532,30 @@ function openDocViewerWithField(fieldKey) {
 
 function openDocViewerWithCheckItem(checkItemKey, docType) {
   var sIdx = currentActiveSampleIndex || 1;
+  var evidenceDoc = getEvidence(checkItemKey, docType);
+
+  // 1. check_item_evidence 우선 적용 (Code.md v5 Contract)
+  if (evidenceDoc) {
+    if (canHighlight(evidenceDoc)) {
+      var page = evidenceDoc.source.page;
+      var box = evidenceDoc.source.boxes[0];
+      var label = evidenceDoc.field_name || (evidenceDoc.source && evidenceDoc.source.text) || (evidenceDoc.value ? String(evidenceDoc.value).slice(0, 25) : checkItemKey);
+      openDocViewer(sIdx, page, box, label);
+      return;
+    } else {
+      // 값은 있으나 위치 정보가 없는 경우 (page: -1 또는 boxes: [])
+      alert("해당 항목(" + (evidenceDoc.field_name || checkItemKey) + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + (evidenceDoc.value || "확인됨") + ")");
+      return;
+    }
+  }
+
+  // 2. check_item_evidence가 존재하는 최신 Job에서 해당 서류 슬롯 자체가 없는 경우
+  if (currentCheckItemEvidence && currentCheckItemEvidence.length > 0) {
+    alert("해당 서류에 대한 근거 데이터(Evidence)가 없습니다.");
+    return;
+  }
+
+  // 3. Fallback for legacy static registry (기존 sample1, sample2 등 호환)
   var target = getDocTarget(sIdx, docType, checkItemKey);
   openDocViewer(sIdx, target.page, target.box, target.label);
 }

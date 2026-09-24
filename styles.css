@@ -2555,6 +2555,33 @@ details.raw-json-details[open] {
   outline-offset: -2px;
 }
 
+.data-table td.clickable-cell.has-evidence {
+  position: relative;
+}
+
+.data-table td.non-clickable-cell,
+.mobile-doc-item.non-clickable-cell {
+  cursor: default;
+  opacity: 0.9;
+}
+
+.data-table td.non-clickable-cell:hover,
+.mobile-doc-item.non-clickable-cell:hover {
+  background: transparent;
+  outline: none;
+}
+
+.data-table td.no-location,
+.mobile-doc-item.no-location {
+  color: var(--text-secondary, #64748b);
+}
+
+.data-table td.no-evidence,
+.mobile-doc-item.no-evidence {
+  color: var(--text-muted, #94a3b8);
+  font-style: italic;
+}
+
 .checklist-item {
   cursor: pointer;
   transition: all 0.2s ease;

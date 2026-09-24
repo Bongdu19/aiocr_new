@@ -1785,12 +1785,22 @@ var SAMPLE_DOC_REGISTRY = {
 
       // 운송 및 날짜
       "invoice::port_of_loading": { page: 2, label: "송장 선적항 (Shimonoseki)", box: { x: 0.04, y: 0.305, width: 0.22, height: 0.025 } },
+      "packing_list::port_of_loading": { page: 4, label: "패킹 선적항 (Shimonoseki)", box: { x: 0.04, y: 0.305, width: 0.22, height: 0.025 } },
       "bl::port_of_loading": { page: 8, label: "B/L 선적항 (SHIMONOSEKI)", box: { x: 0.26, y: 0.34, width: 0.18, height: 0.025 } },
       "insurance::port_of_loading": { page: 10, label: "보험 선적항 (SHIMONOSEKI SEAPORT)", box: { x: 0.23, y: 0.38, width: 0.18, height: 0.025 } },
 
       "invoice::port_of_discharge": { page: 2, label: "송장 양하항 (Busan seaport)", box: { x: 0.04, y: 0.335, width: 0.22, height: 0.025 } },
+      "packing_list::port_of_discharge": { page: 4, label: "패킹 양하항 (Busan seaport)", box: { x: 0.04, y: 0.335, width: 0.22, height: 0.025 } },
       "bl::port_of_discharge": { page: 8, label: "B/L 양하항 (BUSAN SEAPORT)", box: { x: 0.03, y: 0.38, width: 0.20, height: 0.025 } },
       "insurance::port_of_discharge": { page: 10, label: "보험 양하항 (BUSAN SEAPORT)", box: { x: 0.04, y: 0.415, width: 0.18, height: 0.025 } },
+
+      // 거래 및 결제 조건
+      "invoice::incoterms_consistency": { page: 2, label: "송장 인도조건 (CIF INCOTERMS 2010)", box: { x: 0.17, y: 0.435, width: 0.24, height: 0.022 } },
+      "packing_list::incoterms_consistency": { page: 4, label: "패킹 인도조건 (CIF INCOTERMS 2010)", box: { x: 0.17, y: 0.435, width: 0.24, height: 0.022 } },
+      "insurance::incoterms_consistency": { page: 10, label: "보험 인도조건 (CIF INCOTERMS 2010)", box: { x: 0.06, y: 0.525, width: 0.28, height: 0.022 } },
+
+      "invoice::payment_terms_consistency": { page: 2, label: "송장 결제조건 (L/C at sight)", box: { x: 0.51, y: 0.305, width: 0.14, height: 0.022 } },
+      "packing_list::payment_terms_consistency": { page: 4, label: "패킹 결제조건 (L/C at sight)", box: { x: 0.51, y: 0.305, width: 0.14, height: 0.022 } },
 
       "bl::bl_shipment_date": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
       "bl::bl_shipment_date_vs_latest_shipment": { page: 8, label: "B/L 선적일", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },

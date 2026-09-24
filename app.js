@@ -59,42 +59,18 @@ function getEvidence(checkItem, docType) {
 function canHighlight(evidenceDoc, docType, checkItemKey) {
   if (!evidenceDoc) return false;
 
-  // 1) 직접 source BBox가 유효하게 있는 경우
-  if (
+  // 오직 JSON 파일(source)에서 전달된 BBox 및 페이지 정보만으로 유효성 검증 (mock 완전 배제)
+  return !!(
     evidenceDoc.source &&
     typeof evidenceDoc.source.page === "number" &&
     evidenceDoc.source.page > 0 &&
     Array.isArray(evidenceDoc.source.boxes) &&
     evidenceDoc.source.boxes.length > 0
-  ) {
-    return true;
-  }
-
-  // 2) field_name이 있어서 Extract 원본(docFieldMap / fieldMap)에서 좌표를 찾을 수 있는 경우
-  if (evidenceDoc.field_name && docType) {
-    var sIdx = currentActiveSampleIndex || 1;
-    var target = getDocTarget(sIdx, docType, evidenceDoc.field_name);
-    if (target && target.box && target.page > 0) {
-      return true;
-    }
-  }
-
-  // 3) checkItemKey로도 찾을 수 있는 경우 (Fallback)
-  if (checkItemKey && docType) {
-    var sIdx2 = currentActiveSampleIndex || 1;
-    var target2 = getDocTarget(sIdx2, docType, checkItemKey);
-    if (target2 && target2.box && target2.page > 0) {
-      return true;
-    }
-  }
-
-  return false;
+  );
 }
 
 function getEvidenceTarget(sampleIdx, docType, evidenceDoc, checkItemKey) {
-  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
-
-  // 1순위: evidenceDoc 자체에 유효한 source BBox가 있는 경우 (직접 제공)
+  // 오직 JSON 파일(source)에서 전달된 BBox 좌표만 반환 (mock 완전 배제)
   if (
     evidenceDoc &&
     evidenceDoc.source &&
@@ -106,32 +82,9 @@ function getEvidenceTarget(sampleIdx, docType, evidenceDoc, checkItemKey) {
     return {
       page: evidenceDoc.source.page,
       box: evidenceDoc.source.boxes[0],
+      boxes: evidenceDoc.source.boxes,
       label: evidenceDoc.field_name || (evidenceDoc.source && evidenceDoc.source.text) || (evidenceDoc.value ? String(evidenceDoc.value).slice(0, 25) : checkItemKey)
     };
-  }
-
-  // 2순위: evidenceDoc의 field_name을 기반으로 Extract 원본 레지스트리에서 BBox 매핑!
-  if (evidenceDoc && evidenceDoc.field_name && docType) {
-    var fnTarget = getDocTarget(sIdx, docType, evidenceDoc.field_name);
-    if (fnTarget && fnTarget.page > 0 && fnTarget.box) {
-      return {
-        page: fnTarget.page,
-        box: fnTarget.box,
-        label: fnTarget.label || evidenceDoc.field_name || (evidenceDoc.value ? String(evidenceDoc.value).slice(0, 25) : checkItemKey)
-      };
-    }
-  }
-
-  // 3순위: checkItemKey 기반 매핑
-  if (checkItemKey && docType) {
-    var ciTarget = getDocTarget(sIdx, docType, checkItemKey);
-    if (ciTarget && ciTarget.page > 0) {
-      return {
-        page: ciTarget.page,
-        box: ciTarget.box || null,
-        label: ciTarget.label || checkItemKey
-      };
-    }
   }
 
   return null;
@@ -1843,77 +1796,6 @@ var SAMPLE_DOC_REGISTRY = {
       marine_cargo_insurance: 7,
       coo: 1,
       certificate_of_origin: 1
-    },
-    // Document Keys 단독 클릭용 기본 맵
-    fieldMap: {
-      lc_number: { page: 3, label: "L/C 번호 (송장)", text: "M0201602EU02535", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
-      invoice_number: { page: 3, label: "상업송장 번호", text: "1341243174", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
-      bl_number: { page: 5, label: "선하증권(B/L) 번호", text: "LEJPUSG00218", box: { x: 0.76, y: 0.055, width: 0.19, height: 0.028 } },
-      policy_certificate_number: { page: 7, label: "보험증권 번호", text: "OMM 50296528", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
-      certificate_number: { page: 1, label: "원산지증명서 미제출", text: "-", box: null }
-    },
-    // [docType]::[checkItemKey] 서류별 세부 바운딩 박스 매핑
-    docFieldMap: {
-      // L/C 번호
-      "lc::lc_number": { page: 1, label: "인수통지 L/C 번호", box: { x: 0.03, y: 0.32, width: 0.22, height: 0.03 } },
-      "lc::lc_number_consistency": { page: 1, label: "인수통지 L/C 번호", box: { x: 0.03, y: 0.32, width: 0.22, height: 0.03 } },
-      "invoice::lc_number": { page: 3, label: "송장 내 L/C 번호", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
-      "invoice::lc_number_consistency": { page: 3, label: "송장 내 L/C 번호", box: { x: 0.35, y: 0.305, width: 0.22, height: 0.03 } },
-      "bl::lc_number": { page: 6, label: "B/L 첨부 내 L/C 번호 (오인 위치)", box: { x: 0.33, y: 0.425, width: 0.24, height: 0.03 } },
-      "bl::lc_number_consistency": { page: 6, label: "B/L 첨부 내 L/C 번호 (오인 위치)", box: { x: 0.33, y: 0.425, width: 0.24, height: 0.03 } },
-      "packing_list::lc_number": { page: 4, label: "패킹리스트 내 L/C 번호", box: { x: 0.40, y: 0.295, width: 0.22, height: 0.03 } },
-      "packing_list::lc_number_consistency": { page: 4, label: "패킹리스트 내 L/C 번호", box: { x: 0.40, y: 0.295, width: 0.22, height: 0.03 } },
-      "insurance::lc_number": { page: 7, label: "보험증권 내 L/C 번호", box: { x: 0.05, y: 0.455, width: 0.22, height: 0.03 } },
-      "insurance::lc_number_consistency": { page: 7, label: "보험증권 내 L/C 번호", box: { x: 0.05, y: 0.455, width: 0.22, height: 0.03 } },
-
-      // 송장 번호
-      "invoice::invoice_number": { page: 3, label: "상업송장 번호", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
-      "invoice::invoice_number_consistency": { page: 3, label: "상업송장 번호", box: { x: 0.62, y: 0.218, width: 0.18, height: 0.026 } },
-      "insurance::invoice_number": { page: 7, label: "보험증권 내 송장 참조", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
-      "insurance::invoice_number_consistency": { page: 7, label: "보험증권 내 송장 참조", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
-
-      // B/L 번호
-      "bl::bl_number": { page: 5, label: "B/L 번호", box: { x: 0.76, y: 0.055, width: 0.19, height: 0.028 } },
-      "bl::bl_number_consistency": { page: 5, label: "B/L 번호", box: { x: 0.76, y: 0.055, width: 0.19, height: 0.028 } },
-      "lc::bl_number": { page: 1, label: "인수통지서 내 B/L 번호", box: { x: 0.30, y: 0.33, width: 0.20, height: 0.03 } },
-      "lc::bl_number_consistency": { page: 1, label: "인수통지서 내 B/L 번호", box: { x: 0.30, y: 0.33, width: 0.20, height: 0.03 } },
-
-      // 보험 증권번호
-      "insurance::policy_certificate_number": { page: 7, label: "보험증권 번호", box: { x: 0.57, y: 0.125, width: 0.19, height: 0.028 } },
-
-      // 당사자 정보
-      "invoice::seller_party_consistency": { page: 3, label: "송장 수출자 (Domo Caproleuna)", box: { x: 0.30, y: 0.78, width: 0.28, height: 0.05 } },
-      "bl::seller_party_consistency": { page: 5, label: "B/L 송하인 (Shipper)", box: { x: 0.02, y: 0.045, width: 0.28, height: 0.055 } },
-      "insurance::seller_party_consistency": { page: 7, label: "보험 피보험자 (Assured)", box: { x: 0.05, y: 0.175, width: 0.30, height: 0.035 } },
-
-      "invoice::buyer_party_consistency": { page: 3, label: "송장 수입자 (KOLON INDUSTRIES)", box: { x: 0.05, y: 0.19, width: 0.26, height: 0.05 } },
-      "bl::buyer_party_consistency": { page: 5, label: "B/L 통지처 (Notify Party)", box: { x: 0.02, y: 0.21, width: 0.32, height: 0.06 } },
-      "packing_list::buyer_party_consistency": { page: 4, label: "패킹 수하인 (Applicant)", box: { x: 0.06, y: 0.20, width: 0.26, height: 0.05 } },
-
-      // 물품 및 조건
-      "invoice::goods_description": { page: 3, label: "송장 품명 명세", box: { x: 0.34, y: 0.39, width: 0.40, height: 0.035 } },
-      "bl::goods_description": { page: 6, label: "B/L 첨부 품명", box: { x: 0.34, y: 0.27, width: 0.30, height: 0.04 } },
-      "packing_list::goods_description": { page: 4, label: "패킹 품명 명세", box: { x: 0.40, y: 0.35, width: 0.35, height: 0.035 } },
-
-      // 중량 및 포장
-      "invoice::gross_weight_consistency": { page: 3, label: "송장 총중량 (65.284 KG)", box: { x: 0.63, y: 0.605, width: 0.17, height: 0.025 } },
-      "packing_list::gross_weight_consistency": { page: 4, label: "패킹 총중량 (65.284,00)", box: { x: 0.61, y: 0.505, width: 0.16, height: 0.025 } },
-      "bl::gross_weight_consistency": { page: 5, label: "B/L 총중량 (65284,000 KG)", box: { x: 0.60, y: 0.67, width: 0.15, height: 0.028 } },
-
-      "packing_list::package_count_consistency": { page: 4, label: "패킹 수량 (80)", box: { x: 0.80, y: 0.485, width: 0.09, height: 0.028 } },
-      "bl::package_count_consistency": { page: 5, label: "B/L 포장 수량 (80)", box: { x: 0.22, y: 0.69, width: 0.07, height: 0.025 } },
-
-      "bl::measurement_cbm_consistency": { page: 5, label: "B/L 용적 (100,000 CBM)", box: { x: 0.76, y: 0.665, width: 0.19, height: 0.032 } },
-      "packing_list::measurement_cbm_consistency": { page: 4, label: "패킹 용적 (미기재 확인)", box: null },
-
-      // 운송 및 날짜
-      "bl::port_of_loading": { page: 5, label: "선적항 (HAMBURG)", box: { x: 0.51, y: 0.32, width: 0.28, height: 0.025 } },
-      "bl::port_of_discharge": { page: 5, label: "양하항 (BUSAN)", box: { x: 0.30, y: 0.35, width: 0.24, height: 0.025 } },
-      "bl::bl_shipment_date": { page: 5, label: "B/L 본선적재일 (25.02.2016)", box: { x: 0.26, y: 0.885, width: 0.15, height: 0.03 } },
-      "bl::bl_shipment_date_vs_latest_shipment": { page: 5, label: "B/L 선적일", box: { x: 0.26, y: 0.885, width: 0.15, height: 0.03 } },
-      "insurance::insurance_policy_issue_date": { page: 7, label: "보험증권 발행일 (25-Feb-2016)", box: { x: 0.57, y: 0.145, width: 0.15, height: 0.025 } },
-      "insurance::insurance_policy_issue_date_vs_shipment_date": { page: 7, label: "보험증권 발행일", box: { x: 0.57, y: 0.145, width: 0.15, height: 0.025 } },
-      "packing_list::date_flow_timeline": { page: 4, label: "패킹 날짜 표기 (25.02.16)", box: { x: 0.39, y: 0.595, width: 0.13, height: 0.025 } }
     }
   },
   2: {
@@ -1941,116 +1823,6 @@ var SAMPLE_DOC_REGISTRY = {
       marine_cargo_insurance: 10,
       coo: 1,
       certificate_of_origin: 1
-    },
-    fieldMap: {
-      lc_number: { page: 2, label: "송장 내 L/C 번호", text: "M0201410ES04828", box: { x: 0.17, y: 0.495, width: 0.24, height: 0.026 } },
-      invoice_number: { page: 2, label: "송장 번호", text: "A4631-L032-61", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
-      bl_number: { page: 8, label: "B/L 번호", text: "RKOE076", box: { x: 0.72, y: 0.055, width: 0.21, height: 0.03 } },
-      policy_certificate_number: { page: 10, label: "보험증권 번호", text: "15-H0065622", box: { x: 0.07, y: 0.175, width: 0.19, height: 0.032 } },
-      certificate_number: { page: 1, label: "원산지증명서 미제출", text: "-", box: null }
-    },
-    docFieldMap: {
-      // L/C 번호
-      "lc::lc_number": { page: 1, label: "도착통지 L/C 번호", box: { x: 0.12, y: 0.265, width: 0.25, height: 0.03 } },
-      "lc::lc_number_consistency": { page: 1, label: "도착통지 L/C 번호", box: { x: 0.12, y: 0.265, width: 0.25, height: 0.03 } },
-      "invoice::lc_number": { page: 2, label: "송장 내 L/C 번호", box: { x: 0.17, y: 0.495, width: 0.24, height: 0.026 } },
-      "invoice::lc_number_consistency": { page: 2, label: "송장 내 L/C 번호", box: { x: 0.17, y: 0.495, width: 0.24, height: 0.026 } },
-      "packing_list::lc_number": { page: 4, label: "패킹 내 L/C 번호", box: { x: 0.21, y: 0.51, width: 0.20, height: 0.026 } },
-      "packing_list::lc_number_consistency": { page: 4, label: "패킹 내 L/C 번호", box: { x: 0.21, y: 0.51, width: 0.20, height: 0.026 } },
-      "bl::lc_number": { page: 8, label: "B/L 내 L/C 번호", box: { x: 0.15, y: 0.515, width: 0.22, height: 0.026 } },
-      "bl::lc_number_consistency": { page: 8, label: "B/L 내 L/C 번호", box: { x: 0.15, y: 0.515, width: 0.22, height: 0.026 } },
-      "insurance::lc_number": { page: 10, label: "보험 내 L/C 번호", box: { x: 0.465, y: 0.252, width: 0.20, height: 0.018 } },
-      "insurance::lc_number_consistency": { page: 10, label: "보험 내 L/C 번호", box: { x: 0.465, y: 0.252, width: 0.20, height: 0.018 } },
-
-      // 송장 번호
-      "invoice::invoice_number": { page: 2, label: "송장 번호", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
-      "invoice::invoice_number_consistency": { page: 2, label: "송장 번호", box: { x: 0.53, y: 0.075, width: 0.19, height: 0.028 } },
-      "packing_list::invoice_number": { page: 4, label: "패킹 내 송장 참조", box: { x: 0.55, y: 0.08, width: 0.16, height: 0.026 } },
-      "packing_list::invoice_number_consistency": { page: 4, label: "패킹 내 송장 참조", box: { x: 0.55, y: 0.08, width: 0.16, height: 0.026 } },
-      "insurance::invoice_number": { page: 10, label: "보험 내 송장 참조", box: { x: 0.42, y: 0.125, width: 0.15, height: 0.025 } },
-      "insurance::invoice_number_consistency": { page: 10, label: "보험 내 송장 참조", box: { x: 0.42, y: 0.125, width: 0.15, height: 0.025 } },
-
-      // B/L 번호
-      "bl::bl_number": { page: 8, label: "B/L 번호", box: { x: 0.72, y: 0.055, width: 0.21, height: 0.03 } },
-      "bl::bl_number_consistency": { page: 8, label: "B/L 번호", box: { x: 0.72, y: 0.055, width: 0.21, height: 0.03 } },
-      "lc::bl_number": { page: 1, label: "도착통지서 B/L 번호", box: { x: 0.52, y: 0.27, width: 0.14, height: 0.028 } },
-      "lc::bl_number_consistency": { page: 1, label: "도착통지서 B/L 번호", box: { x: 0.52, y: 0.27, width: 0.14, height: 0.028 } },
-
-      // 보험증권 번호
-      "insurance::policy_certificate_number": { page: 10, label: "보험증권 번호", box: { x: 0.07, y: 0.175, width: 0.19, height: 0.032 } },
-
-      // 당사자 정보
-      "invoice::seller_party_consistency": { page: 2, label: "송장 수출자 (Mitsubishi Electric)", box: { x: 0.03, y: 0.055, width: 0.38, height: 0.035 } },
-      "packing_list::seller_party_consistency": { page: 4, label: "패킹 수출자 (Mitsubishi Electric)", box: { x: 0.03, y: 0.055, width: 0.38, height: 0.035 } },
-      "bl::seller_party_consistency": { page: 8, label: "B/L 송하인 (Shipper)", box: { x: 0.03, y: 0.055, width: 0.35, height: 0.035 } },
-      "insurance::seller_party_consistency": { page: 10, label: "보험 피보험자 (Assured)", box: { x: 0.04, y: 0.135, width: 0.35, height: 0.025 } },
-
-      "invoice::buyer_party_consistency": { page: 2, label: "송장 바이어 (Hyundai Rotem)", box: { x: 0.03, y: 0.125, width: 0.32, height: 0.04 } },
-      "packing_list::buyer_party_consistency": { page: 4, label: "패킹 바이어 (Buyer)", box: { x: 0.04, y: 0.135, width: 0.30, height: 0.04 } },
-      "bl::buyer_party_consistency": { page: 8, label: "B/L 수하인 (The Korea Development Bank)", box: { x: 0.03, y: 0.155, width: 0.35, height: 0.045 } },
-      "bl::notify_party": { page: 8, label: "B/L 통지처 (Hyundai Rotem)", box: { x: 0.03, y: 0.22, width: 0.35, height: 0.04 } },
-
-      // 물품 및 조건
-      "invoice::goods_description": { page: 2, label: "송장 품명 명세", box: { x: 0.17, y: 0.375, width: 0.50, height: 0.035 } },
-      "packing_list::goods_description": { page: 4, label: "패킹 품명 명세", box: { x: 0.17, y: 0.38, width: 0.50, height: 0.035 } },
-      "bl::goods_description": { page: 9, label: "B/L 첨부 품명", box: { x: 0.16, y: 0.20, width: 0.50, height: 0.035 } },
-      "insurance::goods_description": { page: 10, label: "보험 품명 명세", box: { x: 0.06, y: 0.46, width: 0.45, height: 0.035 } },
-
-      // 중량 및 포장
-      "invoice::package_count_consistency": { page: 2, label: "송장 포장 수량 (Total: 4 Cases)", box: { x: 0.02, y: 0.835, width: 0.16, height: 0.025 } },
-      "packing_list::package_count_consistency": { page: 4, label: "패킹 수량 (Total: 4 Cases)", box: { x: 0.02, y: 0.835, width: 0.18, height: 0.03 } },
-      "bl::package_count_consistency": { page: 8, label: "B/L 수량 (4 CASES)", box: { x: 0.40, y: 0.435, width: 0.12, height: 0.025 } },
-      "insurance::package_count_consistency": { page: 10, label: "보험 수량 (4 CASES)", box: { x: 0.465, y: 0.268, width: 0.16, height: 0.018 } },
-
-      "packing_list::gross_weight_consistency": { page: 4, label: "패킹 총중량 (4,756 kgs)", box: { x: 0.73, y: 0.565, width: 0.13, height: 0.028 } },
-      "bl::gross_weight_consistency": { page: 8, label: "B/L 총중량 (4.756.00)", box: { x: 0.71, y: 0.435, width: 0.12, height: 0.025 } },
-
-      "packing_list::measurement_cbm_consistency": { page: 4, label: "패킹 CBM (22.948 M3)", box: { x: 0.85, y: 0.565, width: 0.13, height: 0.028 } },
-      "bl::measurement_cbm_consistency": { page: 8, label: "B/L CBM (22.948)", box: { x: 0.84, y: 0.435, width: 0.12, height: 0.025 } },
-
-      // 선명 / 항차 정보 일치성 (vessel_voyage_consistency)
-      "invoice::vessel_voyage_consistency": { page: 2, label: "송장 선명 (SEONG HEE)", box: { x: 0.04, y: 0.278, width: 0.12, height: 0.022 } },
-      "packing_list::vessel_voyage_consistency": { page: 4, label: "패킹 선명 (SEONG HEE)", box: { x: 0.04, y: 0.278, width: 0.12, height: 0.022 } },
-      "bl::vessel_voyage_consistency": { page: 8, label: "B/L 선명/항차 (SEONG HEE / 037)", box: { x: 0.03, y: 0.305, width: 0.28, height: 0.025 } },
-      "insurance::vessel_voyage_consistency": { page: 10, label: "보험 선명 (SEONG HEE)", box: { x: 0.04, y: 0.38, width: 0.12, height: 0.025 } },
-
-      // 운송 및 날짜
-      "invoice::port_of_loading": { page: 2, label: "송장 선적항 (Shimonoseki)", box: { x: 0.04, y: 0.305, width: 0.22, height: 0.025 } },
-      "packing_list::port_of_loading": { page: 4, label: "패킹 선적항 (Shimonoseki)", box: { x: 0.04, y: 0.305, width: 0.22, height: 0.025 } },
-      "bl::port_of_loading": { page: 8, label: "B/L 선적항 (SHIMONOSEKI)", box: { x: 0.26, y: 0.34, width: 0.18, height: 0.025 } },
-      "insurance::port_of_loading": { page: 10, label: "보험 선적항 (SHIMONOSEKI SEAPORT)", box: { x: 0.23, y: 0.38, width: 0.18, height: 0.025 } },
-
-      "invoice::port_of_discharge": { page: 2, label: "송장 양하항 (Busan seaport)", box: { x: 0.04, y: 0.335, width: 0.22, height: 0.025 } },
-      "packing_list::port_of_discharge": { page: 4, label: "패킹 양하항 (Busan seaport)", box: { x: 0.04, y: 0.335, width: 0.22, height: 0.025 } },
-      "bl::port_of_discharge": { page: 8, label: "B/L 양하항 (BUSAN SEAPORT)", box: { x: 0.03, y: 0.38, width: 0.20, height: 0.025 } },
-      "insurance::port_of_discharge": { page: 10, label: "보험 양하항 (BUSAN SEAPORT)", box: { x: 0.04, y: 0.415, width: 0.18, height: 0.025 } },
-
-      // 거래 및 결제 조건
-      "invoice::incoterms_consistency": { page: 2, label: "송장 인도조건 (CIF INCOTERMS 2010)", box: { x: 0.17, y: 0.435, width: 0.24, height: 0.022 } },
-      "packing_list::incoterms_consistency": { page: 4, label: "패킹 인도조건 (CIF INCOTERMS 2010)", box: { x: 0.17, y: 0.435, width: 0.24, height: 0.022 } },
-      "insurance::incoterms_consistency": { page: 10, label: "보험 인도조건 (CIF INCOTERMS 2010)", box: { x: 0.06, y: 0.525, width: 0.28, height: 0.022 } },
-
-      "invoice::payment_terms_consistency": { page: 2, label: "송장 결제조건 (L/C at sight)", box: { x: 0.525, y: 0.288, width: 0.12, height: 0.018 } },
-      "packing_list::payment_terms_consistency": { page: 4, label: "패킹 결제조건 (L/C at sight)", box: { x: 0.525, y: 0.288, width: 0.12, height: 0.018 } },
-
-      // 선적일 및 날짜 검증 일치성
-      "bl::bl_shipment_date": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
-      "bl::bl_shipment_date_vs_latest_shipment": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
-      "invoice::bl_shipment_date_vs_latest_shipment": { page: 2, label: "송장 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
-      "packing_list::bl_shipment_date_vs_latest_shipment": { page: 4, label: "패킹 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
-      "insurance::bl_shipment_date_vs_latest_shipment": { page: 10, label: "보험증권 발행일 (MAY 01, 2015)", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } },
-
-      "insurance::insurance_policy_issue_date": { page: 10, label: "보험증권 발행일 (MAY 01, 2015)", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } },
-      "insurance::insurance_policy_issue_date_vs_shipment_date": { page: 10, label: "보험증권 발행일 (MAY 01, 2015)", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } },
-      "bl::insurance_policy_issue_date_vs_shipment_date": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
-      "invoice::insurance_policy_issue_date_vs_shipment_date": { page: 2, label: "송장 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
-      "packing_list::insurance_policy_issue_date_vs_shipment_date": { page: 4, label: "패킹 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
-
-      "lc::date_flow_timeline": { page: 1, label: "도착통지일 (2015/05/18)", box: { x: 0.02, y: 0.265, width: 0.12, height: 0.03 } },
-      "invoice::date_flow_timeline": { page: 2, label: "송장 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
-      "packing_list::date_flow_timeline": { page: 4, label: "패킹 일자 (May. 7, 2015)", box: { x: 0.58, y: 0.08, width: 0.12, height: 0.025 } },
-      "bl::date_flow_timeline": { page: 8, label: "B/L 선적일 (7 MAY 2015)", box: { x: 0.04, y: 0.94, width: 0.16, height: 0.03 } },
-      "insurance::date_flow_timeline": { page: 10, label: "보험증권 발행일 (MAY 01, 2015)", box: { x: 0.18, y: 0.63, width: 0.16, height: 0.025 } }
     }
   }
 };
@@ -2454,42 +2226,28 @@ function renderHighlightLayer(pageNum) {
   var pageBoxes = [];
   var seenCoords = {};
 
-  // 1. 해당 페이지에 속한 모든 등록 필드 박스 수집 (docFieldMap)
-  if (reg.docFieldMap) {
-    for (var k in reg.docFieldMap) {
-      if (!Object.prototype.hasOwnProperty.call(reg.docFieldMap, k)) continue;
-      var item = reg.docFieldMap[k];
-      if (item && item.page === pageNum && item.box) {
-        var coordKey = Math.round(item.box.x * 1000) + "_" + Math.round(item.box.y * 1000);
-        if (!seenCoords[coordKey]) {
-          seenCoords[coordKey] = true;
-          pageBoxes.push({
-            label: item.label || "",
-            box: item.box,
-            key: k
+  // 1. 오직 JSON 데이터(check_results)에서 현재 페이지(pageNum)에 해당하는 모든 BBox 동적 수집 (mock 배제)
+  if (currentCheckResults && currentCheckResults.length > 0) {
+    currentCheckResults.forEach(function (cr) {
+      if (!cr || !cr.documents) return;
+      Object.keys(cr.documents).forEach(function (docKey) {
+        var docItem = cr.documents[docKey];
+        if (docItem && docItem.source && docItem.source.page === pageNum && Array.isArray(docItem.source.boxes)) {
+          docItem.source.boxes.forEach(function (box) {
+            if (!box) return;
+            var coordKey = Math.round(box.x * 1000) + "_" + Math.round(box.y * 1000);
+            if (!seenCoords[coordKey]) {
+              seenCoords[coordKey] = true;
+              pageBoxes.push({
+                label: (cr.label || cr.check_item || "") + (docItem.value ? ": " + docItem.value : ""),
+                box: box,
+                key: cr.check_item
+              });
+            }
           });
         }
-      }
-    }
-  }
-
-  // 2. fieldMap에서도 해당 페이지 박스 수집
-  if (reg.fieldMap) {
-    for (var fk in reg.fieldMap) {
-      if (!Object.prototype.hasOwnProperty.call(reg.fieldMap, fk)) continue;
-      var fItem = reg.fieldMap[fk];
-      if (fItem && fItem.page === pageNum && fItem.box) {
-        var fCoordKey = Math.round(fItem.box.x * 1000) + "_" + Math.round(fItem.box.y * 1000);
-        if (!seenCoords[fCoordKey]) {
-          seenCoords[fCoordKey] = true;
-          pageBoxes.push({
-            label: fItem.label || "",
-            box: fItem.box,
-            key: fk
-          });
-        }
-      }
-    }
+      });
+    });
   }
 
   // 🌟 3. targetBox와 가장 일치하는 "단 1개의 베스트 박스" 인덱스 선별 (오버랩 같이 찍히는 현상 원천 차단)
@@ -2607,54 +2365,11 @@ function normalizeDocType(docType) {
   return d;
 }
 
-function getDocTarget(sampleIdx, docType, checkItemKey) {
+function getDocTarget(sampleIdx, docType) {
   var sIdx = sampleIdx || currentActiveSampleIndex || 1;
   var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
   var normDoc = normalizeDocType(docType);
   var defaultPage = (normDoc && reg.docPages && reg.docPages[normDoc]) ? reg.docPages[normDoc] : 1;
-
-  if (normDoc && checkItemKey) {
-    // 1-1. 직접 매칭 (예: packing_list::lc_number_consistency)
-    var directKey = normDoc + "::" + checkItemKey;
-    if (reg.docFieldMap && reg.docFieldMap[directKey]) {
-      return reg.docFieldMap[directKey];
-    }
-
-    // 1-2. _consistency 접미사 제거한 baseKey 매칭 (예: packing_list::lc_number)
-    var baseKey = checkItemKey.replace(/_consistency$/, "");
-    var baseCombo = normDoc + "::" + baseKey;
-    if (reg.docFieldMap && reg.docFieldMap[baseCombo]) {
-      return reg.docFieldMap[baseCombo];
-    }
-
-    // 1-3. _vs_ 비교식 키 매칭 (예: bl_shipment_date_vs_latest_shipment -> bl_shipment_date)
-    if (checkItemKey.indexOf("_vs_") >= 0) {
-      var splitKey = checkItemKey.split("_vs_")[0];
-      var splitCombo = normDoc + "::" + splitKey;
-      if (reg.docFieldMap && reg.docFieldMap[splitCombo]) {
-        return reg.docFieldMap[splitCombo];
-      }
-    }
-  }
-
-  // 2. 단독 checkItemKey 매핑 탐색 (Document Keys 카드 등)
-  if (checkItemKey && reg.fieldMap) {
-    if (reg.fieldMap[checkItemKey]) {
-      var f = reg.fieldMap[checkItemKey];
-      if (!normDoc || f.page === defaultPage) {
-        return f;
-      }
-    }
-    var baseOnly = checkItemKey.replace(/_consistency$/, "");
-    if (reg.fieldMap[baseOnly]) {
-      var fBase = reg.fieldMap[baseOnly];
-      if (!normDoc || fBase.page === defaultPage) {
-        return fBase;
-      }
-    }
-  }
-
-  // 3. 일치하는 하이라이트 박스가 없는 경우: 서류 대표 페이지로 가되, 하이라이트 박스는 null
   return {
     page: defaultPage,
     box: null,
@@ -2664,8 +2379,36 @@ function getDocTarget(sampleIdx, docType, checkItemKey) {
 
 function openDocViewerWithField(fieldKey) {
   var sIdx = currentActiveSampleIndex || 1;
-  var target = getDocTarget(sIdx, null, fieldKey);
-  openDocViewer(sIdx, target.page, target.box, target.label || fieldKey);
+  // JSON check_results에서 해당 필드 키와 연관된 항목 탐색
+  var target = null;
+  if (currentCheckResults && currentCheckResults.length > 0) {
+    for (var i = 0; i < currentCheckResults.length; i++) {
+      var cr = currentCheckResults[i];
+      if (!cr || !cr.documents) continue;
+      if (cr.check_item === fieldKey || cr.check_item === (fieldKey + "_consistency") || cr.check_item.indexOf(fieldKey) >= 0) {
+        var docs = Object.keys(cr.documents);
+        for (var j = 0; j < docs.length; j++) {
+          var dItem = cr.documents[docs[j]];
+          if (dItem && dItem.source && dItem.source.page > 0 && Array.isArray(dItem.source.boxes) && dItem.source.boxes.length > 0) {
+            target = {
+              page: dItem.source.page,
+              box: dItem.source.boxes[0],
+              label: (cr.label || fieldKey) + ": " + (dItem.value || "")
+            };
+            break;
+          }
+        }
+      }
+      if (target) break;
+    }
+  }
+
+  if (target && target.page > 0) {
+    openDocViewer(sIdx, target.page, target.box, target.label);
+  } else {
+    var def = getDocTarget(sIdx, null);
+    openDocViewer(sIdx, def.page, null, fieldKey);
+  }
 }
 
 function openDocViewerWithCheckItem(checkItemKey, docType) {
@@ -2673,25 +2416,18 @@ function openDocViewerWithCheckItem(checkItemKey, docType) {
   var evidenceDoc = getEvidence(checkItemKey, docType);
   var target = getEvidenceTarget(sIdx, docType, evidenceDoc, checkItemKey);
 
-  // 1. getEvidenceTarget을 통한 하이라이트 (직접 source BBox 또는 field_name Extract 매핑)
+  // 1. JSON source BBox를 통한 하이라이트 (100% JSON 파일 기반)
   if (target && target.page > 0) {
     openDocViewer(sIdx, target.page, target.box, target.label);
     return;
   }
 
-  // 2. check_item_evidence가 채워진 최신 실행인데 대상 타깃을 전혀 찾을 수 없는 경우
-  if ((currentCheckResults && currentCheckResults.length > 0) || (currentCheckItemEvidence && currentCheckItemEvidence.length > 0)) {
-    if (evidenceDoc) {
-      alert("해당 항목(" + (evidenceDoc.field_name || checkItemKey) + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + (evidenceDoc.value || "확인됨") + ")");
-    } else {
-      alert("해당 서류에 대한 근거 데이터(Evidence)가 없습니다.");
-    }
-    return;
+  // 2. JSON에 BBox가 없는 경우 명확히 안내 (mock 좌표로 대체하지 않음)
+  if (evidenceDoc) {
+    alert("해당 항목(" + (evidenceDoc.field_name || checkItemKey) + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + (evidenceDoc.value || "확인됨") + ")");
+  } else {
+    alert("해당 서류에 대한 근거 데이터(Evidence)가 없습니다.");
   }
-
-  // 3. Fallback for legacy static registry (기존 sample1 등 호환)
-  var fallbackTarget = getDocTarget(sIdx, docType, checkItemKey);
-  openDocViewer(sIdx, fallbackTarget.page, fallbackTarget.box, fallbackTarget.label);
 }
 
 function openDocViewerForDoc(docKey) {

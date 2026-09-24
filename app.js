@@ -56,37 +56,84 @@ function getEvidence(checkItem, docType) {
   return null;
 }
 
+/**
+ * 신용장 서류 하이라이트 좌표 연동 명세서 준수:
+ * 1) polygonToBox: polygon 4점 배열 [{x, y}, ...]을 bbox {x, y, width, height}로 변환 (0~1 normalized)
+ * 2) normalizeSource: coordinates(다각형) 또는 boxes(박스) 입력을 표준 { page, boxes } 형태로 통일
+ * 3) toPixelBox: normalized box를 렌더된 캔버스/페이지 크기 기준 픽셀로 변환
+ */
+function polygonToBox(points) {
+  if (!points || !points.length) return null;
+  var xs = points.map(function (p) { return p.x; });
+  var ys = points.map(function (p) { return p.y; });
+  var minX = Math.min.apply(null, xs);
+  var maxX = Math.max.apply(null, xs);
+  var minY = Math.min.apply(null, ys);
+  var maxY = Math.max.apply(null, ys);
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY
+  };
+}
+
+function normalizeSource(source) {
+  if (!source) return null;
+  var page = typeof source.page === "number" ? source.page : -1;
+  var boxes = [];
+
+  if (Array.isArray(source.boxes) && source.boxes.length > 0) {
+    boxes = source.boxes;
+  } else if (Array.isArray(source.coordinates) && source.coordinates.length > 0) {
+    // 4점 polygon 배열인 경우 bbox 변환
+    var b = polygonToBox(source.coordinates);
+    if (b) boxes.push(b);
+  } else if (Array.isArray(source.word_coordinates) && source.word_coordinates.length > 0) {
+    // 단어별 polygon 배열인 경우
+    source.word_coordinates.forEach(function (poly) {
+      if (Array.isArray(poly) && poly.length > 0) {
+        var wb = polygonToBox(poly);
+        if (wb) boxes.push(wb);
+      }
+    });
+  }
+
+  if (page <= 0 || boxes.length === 0) return null;
+  return {
+    page: page,
+    boxes: boxes
+  };
+}
+
+function toPixelBox(box, pageWidth, pageHeight) {
+  if (!box) return null;
+  return {
+    left: box.x * pageWidth,
+    top: box.y * pageHeight,
+    width: box.width * pageWidth,
+    height: box.height * pageHeight
+  };
+}
+
 function canHighlight(evidenceDoc, docType, checkItemKey) {
   if (!evidenceDoc) return false;
-
-  // 오직 JSON 파일(source)에서 전달된 BBox 및 페이지 정보만으로 유효성 검증 (mock 완전 배제)
-  return !!(
-    evidenceDoc.source &&
-    typeof evidenceDoc.source.page === "number" &&
-    evidenceDoc.source.page > 0 &&
-    Array.isArray(evidenceDoc.source.boxes) &&
-    evidenceDoc.source.boxes.length > 0
-  );
+  var normSrc = normalizeSource(evidenceDoc.source);
+  return !!(normSrc && normSrc.page > 0 && normSrc.boxes.length > 0);
 }
 
 function getEvidenceTarget(sampleIdx, docType, evidenceDoc, checkItemKey) {
-  // 오직 JSON 파일(source)에서 전달된 BBox 좌표만 반환 (mock 완전 배제)
-  if (
-    evidenceDoc &&
-    evidenceDoc.source &&
-    typeof evidenceDoc.source.page === "number" &&
-    evidenceDoc.source.page > 0 &&
-    Array.isArray(evidenceDoc.source.boxes) &&
-    evidenceDoc.source.boxes.length > 0
-  ) {
+  if (!evidenceDoc) return null;
+  var normSrc = normalizeSource(evidenceDoc.source);
+  if (normSrc && normSrc.page > 0 && normSrc.boxes.length > 0) {
     return {
-      page: evidenceDoc.source.page,
-      box: evidenceDoc.source.boxes[0],
-      boxes: evidenceDoc.source.boxes,
+      page: normSrc.page,
+      box: normSrc.boxes[0],
+      boxes: normSrc.boxes,
       label: evidenceDoc.field_name || (evidenceDoc.source && evidenceDoc.source.text) || (evidenceDoc.value ? String(evidenceDoc.value).slice(0, 25) : checkItemKey)
     };
   }
-
   return null;
 }
 
@@ -2232,8 +2279,10 @@ function renderHighlightLayer(pageNum) {
       if (!cr || !cr.documents) return;
       Object.keys(cr.documents).forEach(function (docKey) {
         var docItem = cr.documents[docKey];
-        if (docItem && docItem.source && docItem.source.page === pageNum && Array.isArray(docItem.source.boxes)) {
-          docItem.source.boxes.forEach(function (box) {
+        if (!docItem) return;
+        var normSrc = normalizeSource(docItem.source);
+        if (normSrc && normSrc.page === pageNum && normSrc.boxes.length > 0) {
+          normSrc.boxes.forEach(function (box) {
             if (!box) return;
             var coordKey = Math.round(box.x * 1000) + "_" + Math.round(box.y * 1000);
             if (!seenCoords[coordKey]) {

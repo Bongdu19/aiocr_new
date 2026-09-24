@@ -7,7 +7,7 @@
       "overall_status": "review_required",
       "overall_alert_level": "warning",
       "one_line_summary": "주요 운송·상업서류는 구비되었으나 L/C 원본 및 원산지증명서 부재로 최종 컴플라이언스 판단에는 추가 검토가 필요합니다.",
-      "recommended_action": "L/C 원본 조건과 원산지증명서 요구 여부를 우선 확인하고, 문서 간 식별번호·중량·CBM·선적일 흐름을 재점검하십시오.",
+      "recommended_action": "L/C 원본 조건과 원산지증명서 요구 여부를 우선 확인하고, 문서 간 식별번호·B/L 번호·중량·CBM·선적일 흐름을 재점검하십시오.",
       "document_presence": {
         "lc": false,
         "commercial_invoice": true,
@@ -64,13 +64,14 @@
           "category": "식별번호",
           "check_item": "lc_number_consistency",
           "check_item_ko": "L/C 번호 일치성",
-          "result": "match",
+          "result": "unclear",
           "lc": "",
           "commercial_invoice": "M0201410ES04828",
           "bill_of_lading": "M0201410ES04828",
           "packing_list": "M0201410ES04828",
           "marine_cargo_insurance": "M0201410ES04828",
-          "certificate_of_origin": ""
+          "certificate_of_origin": "",
+          "other_document": "M0201410ES04828-053"
         },
         {
           "category": "식별번호",
@@ -82,7 +83,21 @@
           "bill_of_lading": "",
           "packing_list": "A4631-L032-61",
           "marine_cargo_insurance": "A4631-L032-61",
-          "certificate_of_origin": ""
+          "certificate_of_origin": "",
+          "other_document": ""
+        },
+        {
+          "category": "식별번호",
+          "check_item": "bl_number_reference_consistency",
+          "check_item_ko": "B/L 번호 일치성",
+          "result": "match",
+          "lc": "",
+          "commercial_invoice": "",
+          "bill_of_lading": "RKOE076",
+          "packing_list": "",
+          "marine_cargo_insurance": "",
+          "certificate_of_origin": "",
+          "other_document": "RKOE076"
         },
         {
           "category": "당사자 정보",
@@ -214,7 +229,8 @@
           "bill_of_lading": "2015-05-07",
           "packing_list": "2015-05-07",
           "marine_cargo_insurance": "2015-05-01",
-          "certificate_of_origin": ""
+          "certificate_of_origin": "",
+          "other_document": "2015-05-18"
         }
       ],
       "discrepancy_candidates": [
@@ -278,6 +294,10 @@
             "marine_cargo_insurance": {
               "field_name": "lc_number",
               "value": "M0201410ES04828"
+            },
+            "other_document": {
+              "field_name": "related_lc_number",
+              "value": "M0201410ES04828-053"
             }
           }
         },
@@ -291,6 +311,23 @@
             "marine_cargo_insurance": {
               "field_name": "invoice_number",
               "value": "A4631-L032-61"
+            },
+            "other_document": {
+              "field_name": "related_invoice_number",
+              "value": ""
+            }
+          }
+        },
+        {
+          "check_item": "bl_number_reference_consistency",
+          "documents": {
+            "bill_of_lading": {
+              "field_name": "bl_number",
+              "value": "RKOE076"
+            },
+            "other_document": {
+              "field_name": "reference_number",
+              "value": "RKOE076"
             }
           }
         },
@@ -618,7 +655,7 @@
         }
       }
     },
-    "human_summary": "현대로템 관련 서류 세트에서 상업송장, 패킹리스트, 선하증권, 보험증권, 도착통지서는 확인되었습니다. L/C 번호와 송장번호는 주요 문서 간 대체로 일치합니다. 패킹리스트의 총중량과 CBM도 합계행 기준으로 확인 가능합니다. 보험증권 발행일은 2015-05-01이고 송장·패킹리스트·선하증권의 주요 선적 관련 날짜는 2015-05-07로 이어집니다. 다만 L/C 원본과 원산지증명서가 없어 최종 컴플라이언스 판단은 보수적으로 추가 검토가 필요합니다."
+    "human_summary": "현대로템 관련 서류 세트에서 상업송장, 패킹리스트, 선하증권, 보험증권, 도착통지서는 확인되었습니다. L/C 번호와 송장번호는 주요 문서 간 대체로 일치합니다. B/L 번호도 도착통지 문서와 선하증권 간 일치합니다. 패킹리스트의 총중량과 CBM도 합계행 기준으로 확인 가능합니다. 보험증권 발행일은 2015-05-01이고 송장·패킹리스트·선하증권의 주요 선적 관련 날짜는 2015-05-07로 이어집니다. 다만 L/C 원본과 원산지증명서가 없어 최종 컴플라이언스 판단은 보수적으로 추가 검토가 필요합니다."
   },
   "check_results": [
     {
@@ -711,9 +748,9 @@
       "check_item": "lc_number_consistency",
       "label": "L/C 번호 일치성",
       "category": "consistency",
-      "status": "match",
-      "severity": "info",
-      "message": "확인 가능한 문서 간 L/C 번호가 일치합니다.",
+      "status": "unclear",
+      "severity": "warning",
+      "message": "주요 문서의 L/C 번호는 대체로 일치하나 도착통지 문서에는 접미번호가 포함되어 있어 보수적 검토가 필요합니다.",
       "documents": {
         "commercial_invoice": {
           "field_name": "lc_number",
@@ -778,6 +815,22 @@
               }
             ]
           }
+        },
+        "other_document": {
+          "field_name": "related_lc_number",
+          "value": "M0201410ES04828-053",
+          "confidence": 0.95,
+          "source": {
+            "page": 1,
+            "boxes": [
+              {
+                "x": 0.14,
+                "y": 0.265,
+                "width": 0.23,
+                "height": 0.03
+              }
+            ]
+          }
         }
       }
     },
@@ -824,6 +877,48 @@
       }
     },
     {
+      "check_item": "bl_number_reference_consistency",
+      "label": "B/L 번호 일치성",
+      "category": "consistency",
+      "status": "match",
+      "severity": "info",
+      "message": "도착통지 문서와 선하증권의 B/L 번호가 일치합니다.",
+      "documents": {
+        "bill_of_lading": {
+          "field_name": "bl_number",
+          "value": "RKOE076",
+          "confidence": 0.98,
+          "source": {
+            "page": 8,
+            "boxes": [
+              {
+                "x": 0.81,
+                "y": 0.055,
+                "width": 0.11,
+                "height": 0.026
+              }
+            ]
+          }
+        },
+        "other_document": {
+          "field_name": "reference_number",
+          "value": "RKOE076",
+          "confidence": 0.95,
+          "source": {
+            "page": 1,
+            "boxes": [
+              {
+                "x": 0.58,
+                "y": 0.265,
+                "width": 0.1,
+                "height": 0.03
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "check_item": "seller_party_consistency",
       "label": "수출자/송하인 정보 일치성",
       "category": "party",
@@ -857,7 +952,7 @@
               {
                 "x": 0.03,
                 "y": 0.055,
-                "width": 0.35,
+                "width": 0.38,
                 "height": 0.035
               }
             ]
@@ -887,10 +982,10 @@
             "page": 10,
             "boxes": [
               {
-                "x": 0.04,
-                "y": 0.135,
+                "x": 0.35,
+                "y": 0.075,
                 "width": 0.35,
-                "height": 0.025
+                "height": 0.035
               }
             ]
           }
@@ -914,8 +1009,8 @@
             "boxes": [
               {
                 "x": 0.03,
-                "y": 0.125,
-                "width": 0.32,
+                "y": 0.18,
+                "width": 0.35,
                 "height": 0.04
               }
             ]
@@ -930,9 +1025,9 @@
             "boxes": [
               {
                 "x": 0.03,
-                "y": 0.155,
-                "width": 0.35,
-                "height": 0.045
+                "y": 0.17,
+                "width": 0.38,
+                "height": 0.05
               }
             ]
           }
@@ -945,9 +1040,9 @@
             "page": 4,
             "boxes": [
               {
-                "x": 0.04,
-                "y": 0.135,
-                "width": 0.3,
+                "x": 0.03,
+                "y": 0.18,
+                "width": 0.35,
                 "height": 0.04
               }
             ]
@@ -968,12 +1063,12 @@
           "value": "4756",
           "confidence": 0.94,
           "source": {
-            "page": 4,
+            "page": 5,
             "boxes": [
               {
-                "x": 0.73,
-                "y": 0.565,
-                "width": 0.13,
+                "x": 0.72,
+                "y": 0.44,
+                "width": 0.12,
                 "height": 0.028
               }
             ]
@@ -994,12 +1089,12 @@
           "value": "22.948",
           "confidence": 0.94,
           "source": {
-            "page": 4,
+            "page": 5,
             "boxes": [
               {
-                "x": 0.85,
-                "y": 0.565,
-                "width": 0.13,
+                "x": 0.86,
+                "y": 0.44,
+                "width": 0.12,
                 "height": 0.028
               }
             ]
@@ -1013,10 +1108,10 @@
             "page": 8,
             "boxes": [
               {
-                "x": 0.84,
-                "y": 0.435,
+                "x": 0.86,
+                "y": 0.44,
                 "width": 0.12,
-                "height": 0.025
+                "height": 0.028
               }
             ]
           }
@@ -1039,9 +1134,9 @@
             "page": 8,
             "boxes": [
               {
-                "x": 0.26,
-                "y": 0.34,
-                "width": 0.18,
+                "x": 0.58,
+                "y": 0.298,
+                "width": 0.19,
                 "height": 0.025
               }
             ]
@@ -1055,9 +1150,9 @@
             "page": 10,
             "boxes": [
               {
-                "x": 0.23,
-                "y": 0.38,
-                "width": 0.18,
+                "x": 0.65,
+                "y": 0.515,
+                "width": 0.25,
                 "height": 0.025
               }
             ]
@@ -1082,8 +1177,8 @@
             "boxes": [
               {
                 "x": 0.03,
-                "y": 0.38,
-                "width": 0.2,
+                "y": 0.36,
+                "width": 0.22,
                 "height": 0.025
               }
             ]
@@ -1097,9 +1192,9 @@
             "page": 10,
             "boxes": [
               {
-                "x": 0.04,
-                "y": 0.415,
-                "width": 0.18,
+                "x": 0.18,
+                "y": 0.545,
+                "width": 0.28,
                 "height": 0.025
               }
             ]
@@ -1139,9 +1234,9 @@
             "page": 8,
             "boxes": [
               {
-                "x": 0.04,
-                "y": 0.94,
-                "width": 0.16,
+                "x": 0.18,
+                "y": 0.945,
+                "width": 0.18,
                 "height": 0.03
               }
             ]
@@ -1165,9 +1260,9 @@
             "page": 2,
             "boxes": [
               {
-                "x": 0.58,
-                "y": 0.08,
-                "width": 0.12,
+                "x": 0.78,
+                "y": 0.075,
+                "width": 0.14,
                 "height": 0.025
               }
             ]

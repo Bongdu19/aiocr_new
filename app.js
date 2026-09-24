@@ -788,6 +788,10 @@ function renderComparisonTable(rows) {
   var categoryMap = {};
   var categoryOrder = [];
 
+  var hasOtherDoc = rows.some(function (r) {
+    return r && r.other_document !== undefined && r.other_document !== null && r.other_document !== "";
+  });
+
   var catIcons = {
     "서류 구비 현황": '<i class="bi bi-folder2-open"></i>',
     "당사자 정보": '<i class="bi bi-people-fill"></i>',
@@ -861,17 +865,23 @@ function renderComparisonTable(rows) {
     html += '<div class="group-header-badges">' + summaryBadgeHtml + '</div>';
     html += '</div>';
 
+    var colWidth = hasOtherDoc ? "10.28%" : "11.83%";
+    var itemWidth = hasOtherDoc ? "20%" : "21%";
+
     html += '<table class="data-table">';
     html += '<thead>';
     html += '<tr class="group-subheader-row">';
-    html += '<th class="col-item" style="width: 21%;"><i class="bi bi-card-checklist"></i> 검토 항목</th>';
+    html += '<th class="col-item" style="width: ' + itemWidth + ';"><i class="bi bi-card-checklist"></i> 검토 항목</th>';
     html += '<th class="col-result" style="width: 8%;"><i class="bi bi-shield-check"></i> 결과</th>';
-    html += '<th class="col-doc col-lc" style="width: 11.83%;"><i class="bi bi-file-earmark-text"></i> L/C</th>';
-    html += '<th class="col-doc col-inv" style="width: 11.83%;"><i class="bi bi-receipt"></i> 송장</th>';
-    html += '<th class="col-doc col-bl" style="width: 11.83%;"><i class="bi bi-water"></i> B/L</th>';
-    html += '<th class="col-doc col-pk" style="width: 11.83%;"><i class="bi bi-box-seam"></i> 포장</th>';
-    html += '<th class="col-doc col-ins" style="width: 11.83%;"><i class="bi bi-shield-check"></i> 보험</th>';
-    html += '<th class="col-doc col-coo" style="width: 11.83%;"><i class="bi bi-bank"></i> COO</th>';
+    html += '<th class="col-doc col-lc" style="width: ' + colWidth + ';"><i class="bi bi-file-earmark-text"></i> L/C</th>';
+    html += '<th class="col-doc col-inv" style="width: ' + colWidth + ';"><i class="bi bi-receipt"></i> 송장</th>';
+    html += '<th class="col-doc col-bl" style="width: ' + colWidth + ';"><i class="bi bi-water"></i> B/L</th>';
+    html += '<th class="col-doc col-pk" style="width: ' + colWidth + ';"><i class="bi bi-box-seam"></i> 포장</th>';
+    html += '<th class="col-doc col-ins" style="width: ' + colWidth + ';"><i class="bi bi-shield-check"></i> 보험</th>';
+    html += '<th class="col-doc col-coo" style="width: ' + colWidth + ';"><i class="bi bi-bank"></i> COO</th>';
+    if (hasOtherDoc) {
+      html += '<th class="col-doc col-other" style="width: ' + colWidth + ';"><i class="bi bi-bell-fill"></i> 기타(통지)</th>';
+    }
     html += '</tr>';
     html += '</thead>';
     html += '<tbody>';
@@ -901,6 +911,9 @@ function renderComparisonTable(rows) {
         { key: "insurance", label: "보험", title: "해상보험증권", val: row.marine_cargo_insurance || row.insurance },
         { key: "coo", label: "COO", title: "원산지증명서", val: row.certificate_of_origin || row.coo }
       ];
+      if (hasOtherDoc) {
+        docCols.push({ key: "other_document", label: "기타(통지)", title: "기타서류(도착통지서 등)", val: row.other_document });
+      }
 
       // Table Row
       html += '<tr class="' + rowClass + '">';
@@ -1052,7 +1065,8 @@ function renderChecklists(documentChecklists) {
     insurance: "해상보험 (INS)",
     marine_cargo_insurance: "해상보험 (INS)",
     coo: "원산지증명 (COO)",
-    certificate_of_origin: "원산지증명 (COO)"
+    certificate_of_origin: "원산지증명 (COO)",
+    other_document: "도착통지서 등 (NOTICE)"
   };
 
   var tabsHtml = "";
@@ -1869,7 +1883,8 @@ var SAMPLE_DOC_REGISTRY = {
       insurance: 10,
       marine_cargo_insurance: 10,
       coo: 1,
-      certificate_of_origin: 1
+      certificate_of_origin: 1,
+      other_document: 1
     }
   }
 };
@@ -2411,6 +2426,7 @@ function normalizeDocType(docType) {
   if (d === "certificate_of_origin" || d === "coo") return "coo";
   if (d === "packing" || d === "pack" || d === "pk" || d === "packing_list") return "packing_list";
   if (d === "lc" || d === "letter_of_credit") return "lc";
+  if (d === "other_document" || d === "other" || d === "notice") return "other_document";
   return d;
 }
 

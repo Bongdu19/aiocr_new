@@ -6,33 +6,53 @@ var currentChecklistData = null;
 var activeChecklistTab = null;
 var currentRawPayload = null;
 var currentCheckItemEvidence = [];
+var currentCheckResults = [];
 var els = {};
 
 /**
- * Code.md v5 Contract Helpers:
- * 1) getEvidence: 특정 check_item 및 문서 종류(docType)에 대한 근거(Evidence) 탐색
- * 2) canHighlight: Bounding Box 및 페이지 정보가 유효한지 검증 (page > 0, boxes.length > 0)
+ * Code.md v5/v7 Contract Helpers:
+ * 1) getEvidence: 특정 check_item 및 문서 종류(docType)에 대한 근거(Evidence) 탐색 (check_results 우선, check_item_evidence 보조)
+ * 2) canHighlight: Bounding Box 및 페이지 정보가 유효한지 검증 (page > 0, boxes.length > 0 또는 field_name 추출 매핑)
  */
 function getEvidence(checkItem, docType) {
-  if (!currentCheckItemEvidence || !currentCheckItemEvidence.length) return null;
-  var row = currentCheckItemEvidence.find(function (x) {
-    return x && x.check_item === checkItem;
-  });
-  if (!row || !row.documents) return null;
-
-  // 1) 정확한 docType 직접 매칭
-  if (row.documents[docType]) return row.documents[docType];
-
-  // 2) 정규화된 문서 키 매칭 (예: invoice vs commercial_invoice, packing vs packing_list 등)
   var normDoc = typeof normalizeDocType === "function" ? normalizeDocType(docType) : docType;
-  var keys = Object.keys(row.documents);
-  for (var i = 0; i < keys.length; i++) {
-    var k = keys[i];
-    var normK = typeof normalizeDocType === "function" ? normalizeDocType(k) : k;
-    if (normK === normDoc || k.indexOf(normDoc) >= 0 || normDoc.indexOf(k) >= 0) {
-      return row.documents[k];
+
+  // 1순위: 최신 v7 check_results 에서 탐색 (source: { page, boxes } 가 직접 포함됨!)
+  if (currentCheckResults && currentCheckResults.length) {
+    var cRow = currentCheckResults.find(function (x) {
+      return x && x.check_item === checkItem;
+    });
+    if (cRow && cRow.documents) {
+      if (cRow.documents[docType]) return cRow.documents[docType];
+      var cKeys = Object.keys(cRow.documents);
+      for (var i = 0; i < cKeys.length; i++) {
+        var ck = cKeys[i];
+        var normCk = typeof normalizeDocType === "function" ? normalizeDocType(ck) : ck;
+        if (normCk === normDoc || ck.indexOf(normDoc) >= 0 || normDoc.indexOf(ck) >= 0) {
+          return cRow.documents[ck];
+        }
+      }
     }
   }
+
+  // 2순위: check_item_evidence 에서 탐색
+  if (currentCheckItemEvidence && currentCheckItemEvidence.length) {
+    var row = currentCheckItemEvidence.find(function (x) {
+      return x && x.check_item === checkItem;
+    });
+    if (row && row.documents) {
+      if (row.documents[docType]) return row.documents[docType];
+      var keys = Object.keys(row.documents);
+      for (var j = 0; j < keys.length; j++) {
+        var k = keys[j];
+        var normK = typeof normalizeDocType === "function" ? normalizeDocType(k) : k;
+        if (normK === normDoc || k.indexOf(normDoc) >= 0 || normDoc.indexOf(k) >= 0) {
+          return row.documents[k];
+        }
+      }
+    }
+  }
+
   return null;
 }
 
@@ -519,6 +539,12 @@ function normalizeResultPayload(parsed) {
       return {};
     }
   }
+  if (parsed && parsed.instruct_result) {
+    if (parsed.instruct_result.structured_result) {
+      return parsed.instruct_result.structured_result;
+    }
+    return parsed.instruct_result;
+  }
   if (parsed && parsed.structured_result) {
     return parsed.structured_result;
   }
@@ -526,9 +552,15 @@ function normalizeResultPayload(parsed) {
     if (typeof parsed.content === "string") {
       try {
         var inner = JSON.parse(parsed.content);
+        if (inner.instruct_result) {
+          return inner.instruct_result.structured_result || inner.instruct_result;
+        }
         return inner.structured_result || inner;
       } catch (e) {}
     } else if (typeof parsed.content === "object") {
+      if (parsed.content.instruct_result) {
+        return parsed.content.instruct_result.structured_result || parsed.content.instruct_result;
+      }
       return parsed.content.structured_result || parsed.content;
     }
   }
@@ -703,7 +735,7 @@ function renderDateTimeline(dateChecks) {
  */
 function buildComparisonCellInfo(itemKey, docKey, docTitle, rawVal) {
   var evidenceDoc = getEvidence(itemKey, docKey);
-  var hasEvidenceData = currentCheckItemEvidence && currentCheckItemEvidence.length > 0;
+  var hasEvidenceData = (currentCheckResults && currentCheckResults.length > 0) || (currentCheckItemEvidence && currentCheckItemEvidence.length > 0);
 
   var canClick = true;
   var tooltip = "클릭 시 " + docTitle + " 위치 확인";
@@ -978,6 +1010,31 @@ function renderChecklists(documentChecklists) {
   if (!els.checklistTabs || !els.checklistContent) return;
 
   if (!documentChecklists || typeof documentChecklists !== "object" || Object.keys(documentChecklists).length === 0) {
+    if (currentCheckResults && currentCheckResults.length > 0) {
+      var generatedChecklists = {};
+      currentCheckResults.forEach(function (cr) {
+        if (!cr || !cr.documents) return;
+        Object.keys(cr.documents).forEach(function (docKey) {
+          var docItem = cr.documents[docKey];
+          if (!docItem || (docItem.value === null && docItem.field_name === null)) return;
+          if (!generatedChecklists[docKey]) {
+            generatedChecklists[docKey] = [];
+          }
+          generatedChecklists[docKey].push({
+            item: cr.label || cr.check_item,
+            status: cr.status,
+            details: (docItem.field_name ? '[' + docItem.field_name + '] ' : '') + (docItem.value !== null && docItem.value !== undefined ? String(docItem.value) : '') + (cr.message ? ' (' + cr.message + ')' : ''),
+            confidence: docItem.confidence
+          });
+        });
+      });
+      if (Object.keys(generatedChecklists).length > 0) {
+        documentChecklists = generatedChecklists;
+      }
+    }
+  }
+
+  if (!documentChecklists || typeof documentChecklists !== "object" || Object.keys(documentChecklists).length === 0) {
     els.checklistTabs.innerHTML = "";
     els.checklistContent.innerHTML = '<div class="empty-cell">서류별 체크리스트 데이터가 없습니다.</div>';
     return;
@@ -1057,8 +1114,13 @@ function renderResult(parsed, finalJob) {
   var overall = String(data.overall_status || "").toLowerCase();
   var alertLvl = String(data.overall_alert_level || "").toLowerCase();
 
-  // Code.md v5 Contract: structured_result의 check_item_evidence를 최우선 하이라이트 소스로 저장
-  var structured = (parsed && parsed.structured_result) ? parsed.structured_result : data;
+  // 최신 v7 구조 지원: parsed.check_results 우선 저장 (직접 BBox 좌표 포함)
+  currentCheckResults = (parsed && Array.isArray(parsed.check_results)) ? parsed.check_results : [];
+
+  var structured = (parsed && parsed.instruct_result && parsed.instruct_result.structured_result)
+    || (parsed && parsed.structured_result)
+    || data;
+
   currentCheckItemEvidence = (structured && Array.isArray(structured.check_item_evidence))
     ? structured.check_item_evidence
     : ((data && Array.isArray(data.check_item_evidence)) ? data.check_item_evidence : []);
@@ -1104,8 +1166,12 @@ function renderResult(parsed, finalJob) {
     applyCardTheme(els.alertLevelCard, "card-theme-neutral");
   }
 
-  // human_summary 지원 (parsed.human_summary 또는 structured.human_summary 우선)
-  var summaryText = (parsed && parsed.human_summary) || (structured && structured.human_summary) || cleanText(data.one_line_summary) || "-";
+  // human_summary 지원 (instruct_result.human_summary, parsed.human_summary 또는 structured.human_summary 우선)
+  var summaryText = (parsed && parsed.instruct_result && parsed.instruct_result.human_summary)
+    || (parsed && parsed.human_summary)
+    || (structured && structured.human_summary)
+    || cleanText(data.one_line_summary)
+    || "-";
   els.oneLineSummary.textContent = summaryText;
   els.recommendedAction.textContent = cleanText(data.recommended_action) || "-";
 
@@ -1280,8 +1346,8 @@ function extractResultText(finalJob) {
   }
 
   // 3) structured_result가 최상위에 직접 있는 경우
-  if (finalJob.structured_result) {
-    return finalJob.structured_result;
+  if (finalJob.structured_result || finalJob.instruct_result || finalJob.check_results) {
+    return finalJob.structured_result || finalJob;
   }
 
   // 4) output 배열 순회
@@ -2614,7 +2680,7 @@ function openDocViewerWithCheckItem(checkItemKey, docType) {
   }
 
   // 2. check_item_evidence가 채워진 최신 실행인데 대상 타깃을 전혀 찾을 수 없는 경우
-  if (currentCheckItemEvidence && currentCheckItemEvidence.length > 0) {
+  if ((currentCheckResults && currentCheckResults.length > 0) || (currentCheckItemEvidence && currentCheckItemEvidence.length > 0)) {
     if (evidenceDoc) {
       alert("해당 항목(" + (evidenceDoc.field_name || checkItemKey) + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + (evidenceDoc.value || "확인됨") + ")");
     } else {

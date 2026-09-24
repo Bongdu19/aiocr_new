@@ -36,15 +36,85 @@ function getEvidence(checkItem, docType) {
   return null;
 }
 
-function canHighlight(evidenceDoc) {
-  return !!(
+function canHighlight(evidenceDoc, docType, checkItemKey) {
+  if (!evidenceDoc) return false;
+
+  // 1) 직접 source BBox가 유효하게 있는 경우
+  if (
+    evidenceDoc.source &&
+    typeof evidenceDoc.source.page === "number" &&
+    evidenceDoc.source.page > 0 &&
+    Array.isArray(evidenceDoc.source.boxes) &&
+    evidenceDoc.source.boxes.length > 0
+  ) {
+    return true;
+  }
+
+  // 2) field_name이 있어서 Extract 원본(docFieldMap / fieldMap)에서 좌표를 찾을 수 있는 경우
+  if (evidenceDoc.field_name && docType) {
+    var sIdx = currentActiveSampleIndex || 1;
+    var target = getDocTarget(sIdx, docType, evidenceDoc.field_name);
+    if (target && target.box && target.page > 0) {
+      return true;
+    }
+  }
+
+  // 3) checkItemKey로도 찾을 수 있는 경우 (Fallback)
+  if (checkItemKey && docType) {
+    var sIdx2 = currentActiveSampleIndex || 1;
+    var target2 = getDocTarget(sIdx2, docType, checkItemKey);
+    if (target2 && target2.box && target2.page > 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getEvidenceTarget(sampleIdx, docType, evidenceDoc, checkItemKey) {
+  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
+
+  // 1순위: evidenceDoc 자체에 유효한 source BBox가 있는 경우 (직접 제공)
+  if (
     evidenceDoc &&
     evidenceDoc.source &&
     typeof evidenceDoc.source.page === "number" &&
     evidenceDoc.source.page > 0 &&
     Array.isArray(evidenceDoc.source.boxes) &&
     evidenceDoc.source.boxes.length > 0
-  );
+  ) {
+    return {
+      page: evidenceDoc.source.page,
+      box: evidenceDoc.source.boxes[0],
+      label: evidenceDoc.field_name || (evidenceDoc.source && evidenceDoc.source.text) || (evidenceDoc.value ? String(evidenceDoc.value).slice(0, 25) : checkItemKey)
+    };
+  }
+
+  // 2순위: evidenceDoc의 field_name을 기반으로 Extract 원본 레지스트리에서 BBox 매핑!
+  if (evidenceDoc && evidenceDoc.field_name && docType) {
+    var fnTarget = getDocTarget(sIdx, docType, evidenceDoc.field_name);
+    if (fnTarget && fnTarget.page > 0 && fnTarget.box) {
+      return {
+        page: fnTarget.page,
+        box: fnTarget.box,
+        label: fnTarget.label || evidenceDoc.field_name || (evidenceDoc.value ? String(evidenceDoc.value).slice(0, 25) : checkItemKey)
+      };
+    }
+  }
+
+  // 3순위: checkItemKey 기반 매핑
+  if (checkItemKey && docType) {
+    var ciTarget = getDocTarget(sIdx, docType, checkItemKey);
+    if (ciTarget && ciTarget.page > 0) {
+      return {
+        page: ciTarget.page,
+        box: ciTarget.box || null,
+        label: ciTarget.label || checkItemKey
+      };
+    }
+  }
+
+  return null;
 }
 
 function getEl(id) {
@@ -641,10 +711,12 @@ function buildComparisonCellInfo(itemKey, docKey, docTitle, rawVal) {
   var displayVal = rawVal;
 
   if (hasEvidenceData) {
-    if (evidenceDoc && canHighlight(evidenceDoc)) {
+    if (evidenceDoc && canHighlight(evidenceDoc, docKey, itemKey)) {
       canClick = true;
       cellClass = "clickable-cell has-evidence";
-      tooltip = "클릭 시 " + docTitle + " 원문 위치 확인 (p." + evidenceDoc.source.page + ")";
+      var targetInfo = getEvidenceTarget(currentActiveSampleIndex || 1, docKey, evidenceDoc, itemKey);
+      var pNum = (targetInfo && targetInfo.page) ? targetInfo.page : 1;
+      tooltip = "클릭 시 " + docTitle + " 위치 확인 (p." + pNum + ")";
       if (!displayVal && evidenceDoc.value) displayVal = evidenceDoc.value;
     } else if (evidenceDoc) {
       canClick = false;
@@ -2533,31 +2605,27 @@ function openDocViewerWithField(fieldKey) {
 function openDocViewerWithCheckItem(checkItemKey, docType) {
   var sIdx = currentActiveSampleIndex || 1;
   var evidenceDoc = getEvidence(checkItemKey, docType);
+  var target = getEvidenceTarget(sIdx, docType, evidenceDoc, checkItemKey);
 
-  // 1. check_item_evidence 우선 적용 (Code.md v5 Contract)
-  if (evidenceDoc) {
-    if (canHighlight(evidenceDoc)) {
-      var page = evidenceDoc.source.page;
-      var box = evidenceDoc.source.boxes[0];
-      var label = evidenceDoc.field_name || (evidenceDoc.source && evidenceDoc.source.text) || (evidenceDoc.value ? String(evidenceDoc.value).slice(0, 25) : checkItemKey);
-      openDocViewer(sIdx, page, box, label);
-      return;
-    } else {
-      // 값은 있으나 위치 정보가 없는 경우 (page: -1 또는 boxes: [])
-      alert("해당 항목(" + (evidenceDoc.field_name || checkItemKey) + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + (evidenceDoc.value || "확인됨") + ")");
-      return;
-    }
-  }
-
-  // 2. check_item_evidence가 존재하는 최신 Job에서 해당 서류 슬롯 자체가 없는 경우
-  if (currentCheckItemEvidence && currentCheckItemEvidence.length > 0) {
-    alert("해당 서류에 대한 근거 데이터(Evidence)가 없습니다.");
+  // 1. getEvidenceTarget을 통한 하이라이트 (직접 source BBox 또는 field_name Extract 매핑)
+  if (target && target.page > 0) {
+    openDocViewer(sIdx, target.page, target.box, target.label);
     return;
   }
 
-  // 3. Fallback for legacy static registry (기존 sample1, sample2 등 호환)
-  var target = getDocTarget(sIdx, docType, checkItemKey);
-  openDocViewer(sIdx, target.page, target.box, target.label);
+  // 2. check_item_evidence가 채워진 최신 실행인데 대상 타깃을 전혀 찾을 수 없는 경우
+  if (currentCheckItemEvidence && currentCheckItemEvidence.length > 0) {
+    if (evidenceDoc) {
+      alert("해당 항목(" + (evidenceDoc.field_name || checkItemKey) + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + (evidenceDoc.value || "확인됨") + ")");
+    } else {
+      alert("해당 서류에 대한 근거 데이터(Evidence)가 없습니다.");
+    }
+    return;
+  }
+
+  // 3. Fallback for legacy static registry (기존 sample1 등 호환)
+  var fallbackTarget = getDocTarget(sIdx, docType, checkItemKey);
+  openDocViewer(sIdx, fallbackTarget.page, fallbackTarget.box, fallbackTarget.label);
 }
 
 function openDocViewerForDoc(docKey) {

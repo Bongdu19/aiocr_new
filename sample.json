@@ -1,5 +1,5 @@
 {
-  "id": "job_sample_v5_rotem_test",
+  "id": "job_sample2_v6_hyundai_rotem",
   "object": "response",
   "status": "completed",
   "model": "agt_hYy33EbPU93zggAb6W9z3G",
@@ -7,7 +7,7 @@
     "overall_status": "review_required",
     "overall_alert_level": "warning",
     "one_line_summary": "주요 운송·상업서류는 구비되었으나 L/C 원본 및 원산지증명서 부재로 최종 컴플라이언스 판단에는 추가 검토가 필요합니다.",
-    "recommended_action": "L/C 원본 조건과 원산지증명서 요구 여부를 우선 확인하고, 각 서류의 L/C 번호·중량·CBM·선적일 흐름을 재점검하십시오.",
+    "recommended_action": "L/C 원본 조건과 원산지증명서 요구 여부를 우선 확인하고, 문서 간 식별번호·중량·CBM·선적일 흐름을 재점검하십시오.",
     "document_presence": {
       "lc": false,
       "commercial_invoice": true,
@@ -266,7 +266,7 @@
         {
           "item": "송하인/수하인 지정 적합성",
           "status": "warning",
-          "details": "수하인이 은행 지시식(To the order of bank)으로 기재되어 있어 L/C 조건과의 적합성 재확인이 필요합니다."
+          "details": "수하인이 은행 지시식으로 기재되어 있어 L/C 조건과의 적합성 재확인이 필요합니다."
         }
       ],
       "packing_list": [
@@ -350,37 +350,78 @@
     ],
     "check_item_evidence": [
       {
+        "check_item": "lc_number_consistency",
+        "documents": {
+          "commercial_invoice": {
+            "field_name": "lc_number",
+            "value": "M0201410ES04828"
+          },
+          "bill_of_lading": {
+            "field_name": "lc_number",
+            "value": "M0201410ES04828"
+          },
+          "packing_list": {
+            "field_name": "lc_number",
+            "value": "M0201410ES04828"
+          },
+          "marine_cargo_insurance": {
+            "field_name": "lc_number",
+            "value": "M0201410ES04828"
+          }
+        }
+      },
+      {
         "check_item": "invoice_number_consistency",
         "documents": {
           "commercial_invoice": {
             "field_name": "invoice_number",
-            "value": "A4631-L032-61",
-            "source": {
-              "page": 2,
-              "boxes": [
-                { "x": 0.63, "y": 0.13, "width": 0.14, "height": 0.02 }
-              ]
-            }
+            "value": "A4631-L032-61"
           },
-          "packing_list": {
-            "field_name": "packing_list_number",
-            "value": "A4631-L032-61",
-            "source": {
-              "page": 4,
-              "boxes": [
-                { "x": 0.61, "y": 0.12, "width": 0.14, "height": 0.02 }
-              ]
-            }
+          "certificate_of_origin": {
+            "field_name": "invoice_number",
+            "value": ""
           },
           "marine_cargo_insurance": {
             "field_name": "invoice_number",
-            "value": "A4631-L032-61",
-            "source": {
-              "page": 10,
-              "boxes": [
-                { "x": 0.42, "y": 0.11, "width": 0.16, "height": 0.03 }
-              ]
-            }
+            "value": "A4631-L032-61"
+          }
+        }
+      },
+      {
+        "check_item": "seller_party_consistency",
+        "documents": {
+          "commercial_invoice": {
+            "field_name": "seller_name",
+            "value": "MITSUBISHI ELECTRIC CORPORATION"
+          },
+          "bill_of_lading": {
+            "field_name": "shipper_name",
+            "value": "MITSUBISHI ELECTRIC CORPORATION"
+          },
+          "packing_list": {
+            "field_name": "seller_name",
+            "value": "MITSUBISHI ELECTRIC CORPORATION"
+          },
+          "marine_cargo_insurance": {
+            "field_name": "insured_beneficiary_name",
+            "value": "MITSUBISHI ELECTRIC CORPORATION"
+          }
+        }
+      },
+      {
+        "check_item": "buyer_party_consistency",
+        "documents": {
+          "commercial_invoice": {
+            "field_name": "buyer_name",
+            "value": "Hyundai Rotem Company"
+          },
+          "bill_of_lading": {
+            "field_name": "consignee_name",
+            "value": "TO THE ORDER OF THE KOREA DEVELOPMENT BANK"
+          },
+          "packing_list": {
+            "field_name": "buyer_name",
+            "value": "Hyundai Rotem Company"
           }
         }
       },
@@ -389,13 +430,11 @@
         "documents": {
           "packing_list": {
             "field_name": "total_gross_weight",
-            "value": "4756",
-            "source": {
-              "page": 5,
-              "boxes": [
-                { "x": 0.53, "y": 0.79, "width": 0.08, "height": 0.02 }
-              ]
-            }
+            "value": "4756"
+          },
+          "bill_of_lading": {
+            "field_name": "cargo_details.gross_weight",
+            "value": ""
           }
         }
       },
@@ -404,23 +443,45 @@
         "documents": {
           "packing_list": {
             "field_name": "total_measurement_cbm",
-            "value": "22.948",
-            "source": {
-              "page": 5,
-              "boxes": [
-                { "x": 0.62, "y": 0.79, "width": 0.08, "height": 0.02 }
-              ]
-            }
+            "value": "22.948"
           },
           "bill_of_lading": {
             "field_name": "total_measurement_cbm",
-            "value": "22.948",
-            "source": {
-              "page": 9,
-              "boxes": [
-                { "x": 0.74, "y": 0.18, "width": 0.08, "height": 0.02 }
-              ]
-            }
+            "value": "22.948"
+          }
+        }
+      },
+      {
+        "check_item": "port_of_loading",
+        "documents": {
+          "commercial_invoice": {
+            "field_name": "reference_number",
+            "value": ""
+          },
+          "bill_of_lading": {
+            "field_name": "port_of_loading",
+            "value": "SHIMONOSEKI"
+          },
+          "marine_cargo_insurance": {
+            "field_name": "port_of_loading",
+            "value": "SHIMONOSEKI SEAPORT, JAPAN"
+          }
+        }
+      },
+      {
+        "check_item": "port_of_discharge",
+        "documents": {
+          "bill_of_lading": {
+            "field_name": "port_of_discharge",
+            "value": "BUSAN SEAPORT, SOUTH KOREA"
+          },
+          "packing_list": {
+            "field_name": "buyer_name",
+            "value": ""
+          },
+          "marine_cargo_insurance": {
+            "field_name": "port_of_discharge",
+            "value": "BUSAN SEAPORT, SOUTH KOREA"
           }
         }
       },
@@ -429,23 +490,36 @@
         "documents": {
           "marine_cargo_insurance": {
             "field_name": "policy_issue_date",
-            "value": "2015-05-01",
-            "source": {
-              "page": 10,
-              "boxes": [
-                { "x": 0.44, "y": 0.66, "width": 0.16, "height": 0.02 }
-              ]
-            }
+            "value": "2015-05-01"
           },
           "bill_of_lading": {
             "field_name": "on_board_date",
-            "value": "2015-05-07",
-            "source": {
-              "page": 8,
-              "boxes": [
-                { "x": 0.63, "y": 0.82, "width": 0.10, "height": 0.02 }
-              ]
-            }
+            "value": "2015-05-07"
+          }
+        }
+      },
+      {
+        "check_item": "date_flow_timeline",
+        "documents": {
+          "commercial_invoice": {
+            "field_name": "invoice_date",
+            "value": "2015-05-07"
+          },
+          "packing_list": {
+            "field_name": "packing_list_date",
+            "value": "2015-05-07"
+          },
+          "bill_of_lading": {
+            "field_name": "on_board_date",
+            "value": "2015-05-07"
+          },
+          "marine_cargo_insurance": {
+            "field_name": "policy_issue_date",
+            "value": "2015-05-01"
+          },
+          "other_document": {
+            "field_name": "document_date",
+            "value": "2015-05-18"
           }
         }
       }

@@ -7,7 +7,7 @@
       "overall_status": "review_required",
       "overall_alert_level": "warning",
       "one_line_summary": "주요 운송·상업서류는 구비되었으나 L/C 원본 및 원산지증명서 부재로 최종 컴플라이언스 판단에는 추가 검토가 필요합니다.",
-      "recommended_action": "L/C 원본 조건과 원산지증명서 요구 여부를 우선 확인하고, 문서 간 식별번호·B/L 번호·중량·CBM·선적일 흐름을 재점검하십시오.",
+      "recommended_action": "L/C 원본 조건과 원산지증명서 요구 여부를 우선 확인하고, 문서 간 식별번호·B/L 번호·선적항·양하항·지급조건·중량·CBM·선적일 흐름을 재점검하십시오.",
       "document_presence": {
         "lc": false,
         "commercial_invoice": true,
@@ -129,10 +129,10 @@
           "check_item_ko": "물품 명세 일치성",
           "result": "match",
           "lc": "",
-          "commercial_invoice": "MAIN PROPULSION ELECTRICAL EQUIPMENT / Static Converter / Battery Charger",
+          "commercial_invoice": "Static Converter /Battery Charger",
           "bill_of_lading": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
-          "packing_list": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
-          "marine_cargo_insurance": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
+          "packing_list": "MAIN PROPULSION ELECTRICAL EQUIPMENT",
+          "marine_cargo_insurance": "HYUNDAI ROTEM COMPANY MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
           "certificate_of_origin": ""
         },
         {
@@ -193,6 +193,30 @@
           "bill_of_lading": "BUSAN SEAPORT, SOUTH KOREA",
           "packing_list": "Busan seaport, South Korea",
           "marine_cargo_insurance": "BUSAN SEAPORT, SOUTH KOREA",
+          "certificate_of_origin": ""
+        },
+        {
+          "category": "물품 및 조건",
+          "check_item": "payment_terms_consistency",
+          "check_item_ko": "지급조건 일치성",
+          "result": "match",
+          "lc": "",
+          "commercial_invoice": "L/C at sight",
+          "bill_of_lading": "",
+          "packing_list": "L/C at sight",
+          "marine_cargo_insurance": "",
+          "certificate_of_origin": ""
+        },
+        {
+          "category": "물품 및 조건",
+          "check_item": "freight_terms_consistency",
+          "check_item_ko": "운임조건 일치성",
+          "result": "unclear",
+          "lc": "",
+          "commercial_invoice": "",
+          "bill_of_lading": "FREIGHT PREPAID / AS ARRANGED",
+          "packing_list": "",
+          "marine_cargo_insurance": "",
           "certificate_of_origin": ""
         },
         {
@@ -370,6 +394,44 @@
           }
         },
         {
+          "check_item": "goods_description",
+          "documents": {
+            "commercial_invoice": {
+              "field_name": "line_items.product_name",
+              "value": "Static Converter /Battery Charger"
+            },
+            "bill_of_lading": {
+              "field_name": "cargo_details.cargo_description",
+              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS"
+            },
+            "packing_list": {
+              "field_name": "line_items.product_name",
+              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT"
+            },
+            "marine_cargo_insurance": {
+              "field_name": "insured_goods_summary",
+              "value": "HYUNDAI ROTEM COMPANY MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS"
+            }
+          }
+        },
+        {
+          "check_item": "package_count_consistency",
+          "documents": {
+            "packing_list": {
+              "field_name": "total_package_count",
+              "value": "4"
+            },
+            "bill_of_lading": {
+              "field_name": "cargo_details.package_count",
+              "value": "4"
+            },
+            "marine_cargo_insurance": {
+              "field_name": "package_count",
+              "value": "4"
+            }
+          }
+        },
+        {
           "check_item": "gross_weight_consistency",
           "documents": {
             "packing_list": {
@@ -394,42 +456,64 @@
         {
           "check_item": "port_of_loading",
           "documents": {
-            "bill_of_lading": {
-              "field_name": "port_of_loading",
-              "value": "SHIMONOSEKI"
-            },
-            "marine_cargo_insurance": {
-              "field_name": "port_of_loading",
-              "value": "SHIMONOSEKI SEAPORT, JAPAN"
-            },
             "commercial_invoice": {
               "field_name": "port_of_loading",
               "value": "Shimonoseki seaport, Japan"
             },
+            "bill_of_lading": {
+              "field_name": "port_of_loading",
+              "value": "SHIMONOSEKI"
+            },
             "packing_list": {
               "field_name": "port_of_loading",
               "value": "Shimonoseki seaport, Japan"
+            },
+            "marine_cargo_insurance": {
+              "field_name": "port_of_loading",
+              "value": "SHIMONOSEKI SEAPORT, JAPAN"
             }
           }
         },
         {
           "check_item": "port_of_discharge",
           "documents": {
-            "bill_of_lading": {
-              "field_name": "port_of_discharge",
-              "value": "BUSAN SEAPORT, SOUTH KOREA"
-            },
-            "marine_cargo_insurance": {
-              "field_name": "port_of_discharge",
-              "value": "BUSAN SEAPORT, SOUTH KOREA"
-            },
             "commercial_invoice": {
               "field_name": "port_of_discharge",
               "value": "Busan seaport, South Korea"
             },
+            "bill_of_lading": {
+              "field_name": "port_of_discharge",
+              "value": "BUSAN SEAPORT, SOUTH KOREA"
+            },
             "packing_list": {
               "field_name": "port_of_discharge",
               "value": "Busan seaport, South Korea"
+            },
+            "marine_cargo_insurance": {
+              "field_name": "port_of_discharge",
+              "value": "BUSAN SEAPORT, SOUTH KOREA"
+            }
+          }
+        },
+        {
+          "check_item": "payment_terms_consistency",
+          "documents": {
+            "commercial_invoice": {
+              "field_name": "payment_terms",
+              "value": "L/C at sight"
+            },
+            "packing_list": {
+              "field_name": "payment_terms",
+              "value": "L/C at sight"
+            }
+          }
+        },
+        {
+          "check_item": "freight_terms_consistency",
+          "documents": {
+            "bill_of_lading": {
+              "field_name": "freight_terms",
+              "value": "FREIGHT PREPAID / AS ARRANGED"
             }
           }
         },
@@ -468,57 +552,6 @@
             "other_document": {
               "field_name": "document_date",
               "value": "2015-05-18"
-            }
-          }
-        },
-        {
-          "check_item": "goods_description",
-          "documents": {
-            "commercial_invoice": {
-              "field_name": "goods_description",
-              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT / Static Converter / Battery Charger"
-            },
-            "bill_of_lading": {
-              "field_name": "goods_description",
-              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS"
-            },
-            "packing_list": {
-              "field_name": "goods_description",
-              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS"
-            },
-            "marine_cargo_insurance": {
-              "field_name": "goods_description",
-              "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS"
-            }
-          }
-        },
-        {
-          "check_item": "package_count_consistency",
-          "documents": {
-            "commercial_invoice": {
-              "field_name": "package_count",
-              "value": "4 Cases"
-            },
-            "bill_of_lading": {
-              "field_name": "package_count",
-              "value": "4 CASES"
-            },
-            "packing_list": {
-              "field_name": "package_count",
-              "value": "4 PKGS"
-            },
-            "marine_cargo_insurance": {
-              "field_name": "package_count",
-              "value": "4 CASES 2 SETS"
-            }
-          }
-        },
-        {
-          "check_item": "bl_shipment_date_vs_latest_shipment",
-          "documents": {
-            "bill_of_lading": {
-              "field_name": "on_board_date",
-              "value": "2015-05-07"
             }
           }
         }
@@ -561,6 +594,18 @@
           "total_amount": {
             "field_name": "total_amount",
             "value": "8941748"
+          },
+          "port_of_loading": {
+            "field_name": "port_of_loading",
+            "value": "Shimonoseki seaport, Japan"
+          },
+          "port_of_discharge": {
+            "field_name": "port_of_discharge",
+            "value": "Busan seaport, South Korea"
+          },
+          "payment_terms": {
+            "field_name": "payment_terms",
+            "value": "L/C at sight"
           }
         },
         "bill_of_lading": {
@@ -603,6 +648,10 @@
           "total_measurement_cbm": {
             "field_name": "total_measurement_cbm",
             "value": "22.948"
+          },
+          "freight_terms": {
+            "field_name": "freight_terms",
+            "value": "FREIGHT PREPAID / AS ARRANGED"
           }
         },
         "packing_list": {
@@ -649,6 +698,18 @@
           "total_measurement_cbm": {
             "field_name": "total_measurement_cbm",
             "value": "22.948"
+          },
+          "port_of_loading": {
+            "field_name": "port_of_loading",
+            "value": "Shimonoseki seaport, Japan"
+          },
+          "port_of_discharge": {
+            "field_name": "port_of_discharge",
+            "value": "Busan seaport, South Korea"
+          },
+          "payment_terms": {
+            "field_name": "payment_terms",
+            "value": "L/C at sight"
           }
         },
         "marine_cargo_insurance": {
@@ -691,6 +752,14 @@
           "currency_code": {
             "field_name": "currency_code",
             "value": "JPY"
+          },
+          "package_count": {
+            "field_name": "package_count",
+            "value": "4"
+          },
+          "insured_goods_summary": {
+            "field_name": "insured_goods_summary",
+            "value": "HYUNDAI ROTEM COMPANY MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS"
           }
         },
         "certificate_of_origin": {},
@@ -722,7 +791,7 @@
         }
       }
     },
-    "human_summary": "현대로템 관련 서류 세트에서 상업송장, 패킹리스트, 선하증권, 보험증권, 도착통지서는 확인되었습니다. L/C 번호와 송장번호는 주요 문서 간 대체로 일치합니다. B/L 번호도 도착통지 문서와 선하증권 간 일치합니다. 패킹리스트의 총중량과 CBM도 합계행 기준으로 확인 가능합니다. 보험증권 발행일은 2015-05-01이고 송장·패킹리스트·선하증권의 주요 선적 관련 날짜는 2015-05-07로 이어집니다. 다만 L/C 원본과 원산지증명서가 없어 최종 컴플라이언스 판단은 보수적으로 추가 검토가 필요합니다."
+    "human_summary": "현대로템 관련 서류 세트에서 상업송장, 패킹리스트, 선하증권, 보험증권, 도착통지서는 확인되었습니다. L/C 번호와 송장번호는 주요 문서 간 대체로 일치합니다. B/L 번호도 도착통지 문서와 선하증권 간 일치합니다. 선적항, 양하항, 지급조건도 확인 가능한 문서 간 대체로 일치합니다. 패킹리스트의 총중량과 CBM도 합계행 기준으로 확인 가능합니다. 보험증권 발행일은 2015-05-01이고 송장·패킹리스트·선하증권의 주요 선적 관련 날짜는 2015-05-07로 이어집니다. 다만 L/C 원본과 원산지증명서가 없어 최종 컴플라이언스 판단은 보수적으로 추가 검토가 필요합니다."
   },
   "check_results": [
     {
@@ -746,12 +815,7 @@
           "source": {
             "page": 2,
             "boxes": [
-              {
-                "x": 0.4,
-                "y": 0.02,
-                "width": 0.2,
-                "height": 0.03
-              }
+              { "x": 0.10, "y": 0.08, "width": 0.12, "height": 0.03 }
             ]
           }
         },
@@ -762,12 +826,7 @@
           "source": {
             "page": 8,
             "boxes": [
-              {
-                "x": 0.35,
-                "y": 0.02,
-                "width": 0.3,
-                "height": 0.03
-              }
+              { "x": 0.10, "y": 0.08, "width": 0.18, "height": 0.03 }
             ]
           }
         },
@@ -778,12 +837,7 @@
           "source": {
             "page": 4,
             "boxes": [
-              {
-                "x": 0.4,
-                "y": 0.02,
-                "width": 0.2,
-                "height": 0.03
-              }
+              { "x": 0.10, "y": 0.08, "width": 0.14, "height": 0.03 }
             ]
           }
         },
@@ -794,12 +848,7 @@
           "source": {
             "page": 10,
             "boxes": [
-              {
-                "x": 0.25,
-                "y": 0.02,
-                "width": 0.5,
-                "height": 0.04
-              }
+              { "x": 0.10, "y": 0.08, "width": 0.24, "height": 0.03 }
             ]
           }
         },
@@ -826,12 +875,7 @@
           "source": {
             "page": 2,
             "boxes": [
-              {
-                "x": 0.17,
-                "y": 0.495,
-                "width": 0.24,
-                "height": 0.026
-              }
+              { "x": 0.68, "y": 0.46, "width": 0.16, "height": 0.02 }
             ]
           }
         },
@@ -840,14 +884,9 @@
           "value": "M0201410ES04828",
           "confidence": 0.95,
           "source": {
-            "page": 8,
+            "page": 9,
             "boxes": [
-              {
-                "x": 0.15,
-                "y": 0.515,
-                "width": 0.22,
-                "height": 0.026
-              }
+              { "x": 0.62, "y": 0.34, "width": 0.16, "height": 0.02 }
             ]
           }
         },
@@ -858,12 +897,7 @@
           "source": {
             "page": 4,
             "boxes": [
-              {
-                "x": 0.21,
-                "y": 0.51,
-                "width": 0.2,
-                "height": 0.026
-              }
+              { "x": 0.67, "y": 0.46, "width": 0.16, "height": 0.02 }
             ]
           }
         },
@@ -874,12 +908,7 @@
           "source": {
             "page": 10,
             "boxes": [
-              {
-                "x": 0.465,
-                "y": 0.252,
-                "width": 0.2,
-                "height": 0.018
-              }
+              { "x": 0.42, "y": 0.47, "width": 0.16, "height": 0.02 }
             ]
           }
         },
@@ -890,12 +919,7 @@
           "source": {
             "page": 1,
             "boxes": [
-              {
-                "x": 0.14,
-                "y": 0.265,
-                "width": 0.23,
-                "height": 0.03
-              }
+              { "x": 0.22, "y": 0.28, "width": 0.18, "height": 0.02 }
             ]
           }
         }
@@ -916,12 +940,7 @@
           "source": {
             "page": 2,
             "boxes": [
-              {
-                "x": 0.53,
-                "y": 0.075,
-                "width": 0.19,
-                "height": 0.028
-              }
+              { "x": 0.63, "y": 0.13, "width": 0.14, "height": 0.02 }
             ]
           }
         },
@@ -932,12 +951,7 @@
           "source": {
             "page": 10,
             "boxes": [
-              {
-                "x": 0.42,
-                "y": 0.125,
-                "width": 0.15,
-                "height": 0.025
-              }
+              { "x": 0.34, "y": 0.11, "width": 0.18, "height": 0.03 }
             ]
           }
         }
@@ -958,12 +972,7 @@
           "source": {
             "page": 8,
             "boxes": [
-              {
-                "x": 0.81,
-                "y": 0.055,
-                "width": 0.11,
-                "height": 0.026
-              }
+              { "x": 0.18, "y": 0.12, "width": 0.10, "height": 0.03 }
             ]
           }
         },
@@ -974,12 +983,7 @@
           "source": {
             "page": 1,
             "boxes": [
-              {
-                "x": 0.58,
-                "y": 0.265,
-                "width": 0.1,
-                "height": 0.03
-              }
+              { "x": 0.58, "y": 0.28, "width": 0.08, "height": 0.02 }
             ]
           }
         }
@@ -1000,12 +1004,7 @@
           "source": {
             "page": 2,
             "boxes": [
-              {
-                "x": 0.03,
-                "y": 0.055,
-                "width": 0.38,
-                "height": 0.035
-              }
+              { "x": 0.18, "y": 0.13, "width": 0.28, "height": 0.02 }
             ]
           }
         },
@@ -1016,12 +1015,7 @@
           "source": {
             "page": 8,
             "boxes": [
-              {
-                "x": 0.03,
-                "y": 0.055,
-                "width": 0.38,
-                "height": 0.035
-              }
+              { "x": 0.10, "y": 0.08, "width": 0.28, "height": 0.05 }
             ]
           }
         },
@@ -1032,12 +1026,7 @@
           "source": {
             "page": 4,
             "boxes": [
-              {
-                "x": 0.03,
-                "y": 0.055,
-                "width": 0.38,
-                "height": 0.035
-              }
+              { "x": 0.10, "y": 0.12, "width": 0.30, "height": 0.02 }
             ]
           }
         },
@@ -1048,12 +1037,7 @@
           "source": {
             "page": 10,
             "boxes": [
-              {
-                "x": 0.35,
-                "y": 0.075,
-                "width": 0.35,
-                "height": 0.035
-              }
+              { "x": 0.34, "y": 0.14, "width": 0.26, "height": 0.03 }
             ]
           }
         }
@@ -1074,12 +1058,7 @@
           "source": {
             "page": 2,
             "boxes": [
-              {
-                "x": 0.03,
-                "y": 0.18,
-                "width": 0.35,
-                "height": 0.04
-              }
+              { "x": 0.10, "y": 0.24, "width": 0.22, "height": 0.03 }
             ]
           }
         },
@@ -1090,12 +1069,7 @@
           "source": {
             "page": 8,
             "boxes": [
-              {
-                "x": 0.03,
-                "y": 0.17,
-                "width": 0.38,
-                "height": 0.05
-              }
+              { "x": 0.10, "y": 0.16, "width": 0.34, "height": 0.05 }
             ]
           }
         },
@@ -1106,12 +1080,104 @@
           "source": {
             "page": 4,
             "boxes": [
-              {
-                "x": 0.03,
-                "y": 0.18,
-                "width": 0.35,
-                "height": 0.04
-              }
+              { "x": 0.10, "y": 0.24, "width": 0.22, "height": 0.03 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "check_item": "goods_description",
+      "label": "물품 명세 일치성",
+      "category": "goods",
+      "status": "match",
+      "severity": "info",
+      "message": "확인 가능한 문서 간 물품 명세가 대체로 일치합니다.",
+      "documents": {
+        "commercial_invoice": {
+          "field_name": "line_items.product_name",
+          "value": "Static Converter /Battery Charger",
+          "confidence": 0.95,
+          "source": {
+            "page": 3,
+            "boxes": [
+              { "x": 0.24, "y": 0.18, "width": 0.24, "height": 0.02 }
+            ]
+          }
+        },
+        "bill_of_lading": {
+          "field_name": "cargo_details.cargo_description",
+          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
+          "confidence": 0.90,
+          "source": {
+            "page": 9,
+            "boxes": [
+              { "x": 0.10, "y": 0.12, "width": 0.52, "height": 0.10 }
+            ]
+          }
+        },
+        "packing_list": {
+          "field_name": "line_items.product_name",
+          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT",
+          "confidence": 0.90,
+          "source": {
+            "page": 5,
+            "boxes": [
+              { "x": 0.28, "y": 0.18, "width": 0.16, "height": 0.02 }
+            ]
+          }
+        },
+        "marine_cargo_insurance": {
+          "field_name": "insured_goods_summary",
+          "value": "HYUNDAI ROTEM COMPANY MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
+          "confidence": 0.90,
+          "source": {
+            "page": 10,
+            "boxes": [
+              { "x": 0.18, "y": 0.58, "width": 0.46, "height": 0.10 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "check_item": "package_count_consistency",
+      "label": "포장 수량 일치성",
+      "category": "quantity",
+      "status": "match",
+      "severity": "info",
+      "message": "확인 가능한 문서 간 포장 수량이 대체로 일치합니다.",
+      "documents": {
+        "packing_list": {
+          "field_name": "total_package_count",
+          "value": "4",
+          "confidence": 0.93,
+          "source": {
+            "page": 5,
+            "boxes": [
+              { "x": 0.18, "y": 0.79, "width": 0.08, "height": 0.02 }
+            ]
+          }
+        },
+        "bill_of_lading": {
+          "field_name": "cargo_details.package_count",
+          "value": "4",
+          "confidence": 0.80,
+          "source": {
+            "page": 8,
+            "boxes": [
+              { "x": 0.56, "y": 0.58, "width": 0.10, "height": 0.02 }
+            ]
+          }
+        },
+        "marine_cargo_insurance": {
+          "field_name": "package_count",
+          "value": "4",
+          "confidence": 0.85,
+          "source": {
+            "page": 10,
+            "boxes": [
+              { "x": 0.62, "y": 0.47, "width": 0.08, "height": 0.02 }
             ]
           }
         }
@@ -1132,12 +1198,7 @@
           "source": {
             "page": 5,
             "boxes": [
-              {
-                "x": 0.72,
-                "y": 0.44,
-                "width": 0.12,
-                "height": 0.028
-              }
+              { "x": 0.53, "y": 0.79, "width": 0.08, "height": 0.02 }
             ]
           }
         }
@@ -1158,12 +1219,7 @@
           "source": {
             "page": 5,
             "boxes": [
-              {
-                "x": 0.86,
-                "y": 0.44,
-                "width": 0.12,
-                "height": 0.028
-              }
+              { "x": 0.62, "y": 0.79, "width": 0.08, "height": 0.02 }
             ]
           }
         },
@@ -1172,14 +1228,9 @@
           "value": "22.948",
           "confidence": 0.88,
           "source": {
-            "page": 8,
+            "page": 9,
             "boxes": [
-              {
-                "x": 0.86,
-                "y": 0.44,
-                "width": 0.12,
-                "height": 0.028
-              }
+              { "x": 0.62, "y": 0.22, "width": 0.08, "height": 0.02 }
             ]
           }
         }
@@ -1193,6 +1244,17 @@
       "severity": "info",
       "message": "확인 가능한 문서 간 선적항 정보가 일치합니다.",
       "documents": {
+        "commercial_invoice": {
+          "field_name": "port_of_loading",
+          "value": "Shimonoseki seaport, Japan",
+          "confidence": 0.90,
+          "source": {
+            "page": 2,
+            "boxes": [
+              { "x": 0.10, "y": 0.31, "width": 0.22, "height": 0.02 }
+            ]
+          }
+        },
         "bill_of_lading": {
           "field_name": "port_of_loading",
           "value": "SHIMONOSEKI",
@@ -1200,12 +1262,18 @@
           "source": {
             "page": 8,
             "boxes": [
-              {
-                "x": 0.58,
-                "y": 0.298,
-                "width": 0.19,
-                "height": 0.025
-              }
+              { "x": 0.49, "y": 0.26, "width": 0.12, "height": 0.03 }
+            ]
+          }
+        },
+        "packing_list": {
+          "field_name": "port_of_loading",
+          "value": "Shimonoseki seaport, Japan",
+          "confidence": 0.88,
+          "source": {
+            "page": 4,
+            "boxes": [
+              { "x": 0.10, "y": 0.31, "width": 0.22, "height": 0.02 }
             ]
           }
         },
@@ -1216,44 +1284,7 @@
           "source": {
             "page": 10,
             "boxes": [
-              {
-                "x": 0.65,
-                "y": 0.515,
-                "width": 0.25,
-                "height": 0.025
-              }
-            ]
-          }
-        },
-        "commercial_invoice": {
-          "field_name": "port_of_loading",
-          "value": "Shimonoseki seaport, Japan",
-          "confidence": 0.95,
-          "source": {
-            "page": 2,
-            "boxes": [
-              {
-                "x": 0.18,
-                "y": 0.4,
-                "width": 0.3,
-                "height": 0.025
-              }
-            ]
-          }
-        },
-        "packing_list": {
-          "field_name": "port_of_loading",
-          "value": "Shimonoseki seaport, Japan",
-          "confidence": 0.95,
-          "source": {
-            "page": 4,
-            "boxes": [
-              {
-                "x": 0.18,
-                "y": 0.4,
-                "width": 0.3,
-                "height": 0.025
-              }
+              { "x": 0.52, "y": 0.52, "width": 0.22, "height": 0.02 }
             ]
           }
         }
@@ -1267,6 +1298,17 @@
       "severity": "info",
       "message": "확인 가능한 문서 간 양하항 정보가 일치합니다.",
       "documents": {
+        "commercial_invoice": {
+          "field_name": "port_of_discharge",
+          "value": "Busan seaport, South Korea",
+          "confidence": 0.90,
+          "source": {
+            "page": 2,
+            "boxes": [
+              { "x": 0.10, "y": 0.35, "width": 0.20, "height": 0.02 }
+            ]
+          }
+        },
         "bill_of_lading": {
           "field_name": "port_of_discharge",
           "value": "BUSAN SEAPORT, SOUTH KOREA",
@@ -1274,12 +1316,18 @@
           "source": {
             "page": 8,
             "boxes": [
-              {
-                "x": 0.03,
-                "y": 0.36,
-                "width": 0.22,
-                "height": 0.025
-              }
+              { "x": 0.52, "y": 0.39, "width": 0.24, "height": 0.02 }
+            ]
+          }
+        },
+        "packing_list": {
+          "field_name": "port_of_discharge",
+          "value": "Busan seaport, South Korea",
+          "confidence": 0.88,
+          "source": {
+            "page": 4,
+            "boxes": [
+              { "x": 0.10, "y": 0.35, "width": 0.20, "height": 0.02 }
             ]
           }
         },
@@ -1290,44 +1338,60 @@
           "source": {
             "page": 10,
             "boxes": [
-              {
-                "x": 0.18,
-                "y": 0.545,
-                "width": 0.28,
-                "height": 0.025
-              }
+              { "x": 0.20, "y": 0.56, "width": 0.24, "height": 0.02 }
             ]
           }
-        },
+        }
+      }
+    },
+    {
+      "check_item": "payment_terms_consistency",
+      "label": "지급조건 일치성",
+      "category": "terms",
+      "status": "match",
+      "severity": "info",
+      "message": "상업송장과 패킹리스트의 지급조건이 일치합니다.",
+      "documents": {
         "commercial_invoice": {
-          "field_name": "port_of_discharge",
-          "value": "Busan seaport, South Korea",
-          "confidence": 0.95,
+          "field_name": "payment_terms",
+          "value": "L/C at sight",
+          "confidence": 0.92,
           "source": {
             "page": 2,
             "boxes": [
-              {
-                "x": 0.55,
-                "y": 0.4,
-                "width": 0.3,
-                "height": 0.025
-              }
+              { "x": 0.71, "y": 0.28, "width": 0.14, "height": 0.02 }
             ]
           }
         },
         "packing_list": {
-          "field_name": "port_of_discharge",
-          "value": "Busan seaport, South Korea",
-          "confidence": 0.95,
+          "field_name": "payment_terms",
+          "value": "L/C at sight",
+          "confidence": 0.92,
           "source": {
             "page": 4,
             "boxes": [
-              {
-                "x": 0.55,
-                "y": 0.4,
-                "width": 0.3,
-                "height": 0.025
-              }
+              { "x": 0.52, "y": 0.28, "width": 0.12, "height": 0.02 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "check_item": "freight_terms_consistency",
+      "label": "운임조건 일치성",
+      "category": "terms",
+      "status": "unclear",
+      "severity": "warning",
+      "message": "선하증권의 운임조건은 확인되나 다른 문서와의 직접 비교 근거는 제한적입니다.",
+      "documents": {
+        "bill_of_lading": {
+          "field_name": "freight_terms",
+          "value": "FREIGHT PREPAID / AS ARRANGED",
+          "confidence": 0.90,
+          "source": {
+            "page": 8,
+            "boxes": [
+              { "x": 0.58, "y": 0.58, "width": 0.24, "height": 0.03 }
             ]
           }
         }
@@ -1348,12 +1412,7 @@
           "source": {
             "page": 10,
             "boxes": [
-              {
-                "x": 0.18,
-                "y": 0.63,
-                "width": 0.16,
-                "height": 0.025
-              }
+              { "x": 0.44, "y": 0.66, "width": 0.16, "height": 0.02 }
             ]
           }
         },
@@ -1364,12 +1423,7 @@
           "source": {
             "page": 8,
             "boxes": [
-              {
-                "x": 0.18,
-                "y": 0.945,
-                "width": 0.18,
-                "height": 0.03
-              }
+              { "x": 0.63, "y": 0.82, "width": 0.10, "height": 0.02 }
             ]
           }
         }
@@ -1390,12 +1444,7 @@
           "source": {
             "page": 2,
             "boxes": [
-              {
-                "x": 0.78,
-                "y": 0.075,
-                "width": 0.14,
-                "height": 0.025
-              }
+              { "x": 0.78, "y": 0.13, "width": 0.10, "height": 0.02 }
             ]
           }
         },
@@ -1406,12 +1455,7 @@
           "source": {
             "page": 4,
             "boxes": [
-              {
-                "x": 0.58,
-                "y": 0.08,
-                "width": 0.12,
-                "height": 0.025
-              }
+              { "x": 0.78, "y": 0.13, "width": 0.10, "height": 0.02 }
             ]
           }
         },
@@ -1422,12 +1466,7 @@
           "source": {
             "page": 8,
             "boxes": [
-              {
-                "x": 0.04,
-                "y": 0.94,
-                "width": 0.16,
-                "height": 0.03
-              }
+              { "x": 0.63, "y": 0.82, "width": 0.10, "height": 0.02 }
             ]
           }
         },
@@ -1438,12 +1477,7 @@
           "source": {
             "page": 10,
             "boxes": [
-              {
-                "x": 0.18,
-                "y": 0.63,
-                "width": 0.16,
-                "height": 0.025
-              }
+              { "x": 0.44, "y": 0.66, "width": 0.16, "height": 0.02 }
             ]
           }
         },
@@ -1454,186 +1488,7 @@
           "source": {
             "page": 1,
             "boxes": [
-              {
-                "x": 0.02,
-                "y": 0.265,
-                "width": 0.12,
-                "height": 0.03
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "check_item": "goods_description",
-      "label": "물품 명세 일치성",
-      "category": "goods",
-      "status": "match",
-      "severity": "info",
-      "message": "확인 가능한 문서 간 물품 명세가 대체로 일치합니다.",
-      "documents": {
-        "commercial_invoice": {
-          "field_name": "goods_description",
-          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT / Static Converter / Battery Charger",
-          "confidence": 0.95,
-          "source": {
-            "page": 2,
-            "boxes": [
-              {
-                "x": 0.18,
-                "y": 0.54,
-                "width": 0.5,
-                "height": 0.05
-              }
-            ]
-          }
-        },
-        "bill_of_lading": {
-          "field_name": "goods_description",
-          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
-          "confidence": 0.95,
-          "source": {
-            "page": 8,
-            "boxes": [
-              {
-                "x": 0.55,
-                "y": 0.47,
-                "width": 0.42,
-                "height": 0.05
-              }
-            ]
-          }
-        },
-        "packing_list": {
-          "field_name": "goods_description",
-          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
-          "confidence": 0.95,
-          "source": {
-            "page": 4,
-            "boxes": [
-              {
-                "x": 0.2,
-                "y": 0.54,
-                "width": 0.5,
-                "height": 0.05
-              }
-            ]
-          }
-        },
-        "marine_cargo_insurance": {
-          "field_name": "goods_description",
-          "value": "MAIN PROPULSION ELECTRICAL EQUIPMENT FOR DMRC RS10 486 CARS PROPULSION SYSTEMS",
-          "confidence": 0.95,
-          "source": {
-            "page": 10,
-            "boxes": [
-              {
-                "x": 0.15,
-                "y": 0.38,
-                "width": 0.55,
-                "height": 0.05
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "check_item": "package_count_consistency",
-      "label": "포장 수량 일치성",
-      "category": "quantity",
-      "status": "match",
-      "severity": "info",
-      "message": "확인 가능한 문서 간 포장 수량이 일치합니다.",
-      "documents": {
-        "commercial_invoice": {
-          "field_name": "package_count",
-          "value": "4 Cases",
-          "confidence": 0.96,
-          "source": {
-            "page": 2,
-            "boxes": [
-              {
-                "x": 0.03,
-                "y": 0.54,
-                "width": 0.14,
-                "height": 0.03
-              }
-            ]
-          }
-        },
-        "bill_of_lading": {
-          "field_name": "package_count",
-          "value": "4 CASES",
-          "confidence": 0.96,
-          "source": {
-            "page": 8,
-            "boxes": [
-              {
-                "x": 0.69,
-                "y": 0.44,
-                "width": 0.12,
-                "height": 0.028
-              }
-            ]
-          }
-        },
-        "packing_list": {
-          "field_name": "package_count",
-          "value": "4 PKGS",
-          "confidence": 0.96,
-          "source": {
-            "page": 4,
-            "boxes": [
-              {
-                "x": 0.03,
-                "y": 0.54,
-                "width": 0.14,
-                "height": 0.03
-              }
-            ]
-          }
-        },
-        "marine_cargo_insurance": {
-          "field_name": "package_count",
-          "value": "4 CASES 2 SETS",
-          "confidence": 0.95,
-          "source": {
-            "page": 10,
-            "boxes": [
-              {
-                "x": 0.05,
-                "y": 0.38,
-                "width": 0.15,
-                "height": 0.03
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "check_item": "bl_shipment_date_vs_latest_shipment",
-      "label": "선적일 vs 최종선적기한",
-      "category": "date",
-      "status": "unclear",
-      "severity": "warning",
-      "message": "B/L상 본선적재일은 2015-05-07이나 L/C상 최종선적기한 정보가 없어 적합성을 확정할 수 없습니다.",
-      "documents": {
-        "bill_of_lading": {
-          "field_name": "on_board_date",
-          "value": "2015-05-07",
-          "confidence": 0.95,
-          "source": {
-            "page": 8,
-            "boxes": [
-              {
-                "x": 0.18,
-                "y": 0.945,
-                "width": 0.18,
-                "height": 0.03
-              }
+              { "x": 0.40, "y": 0.14, "width": 0.12, "height": 0.02 }
             ]
           }
         }

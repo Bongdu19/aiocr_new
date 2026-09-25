@@ -157,6 +157,7 @@ function initElements() {
   els.sampleBtn2 = getEl("sampleBtn2");
   els.sampleBtn3 = getEl("sampleBtn3");
   els.sampleBtn4 = getEl("sampleBtn4");
+  els.sampleBtn6 = getEl("sampleBtn6");
   els.sampleSelect = getEl("sampleSelect");
   els.customSampleOption = getEl("customSampleOption");
   els.clearBtn = getEl("clearBtn");
@@ -530,6 +531,140 @@ function clearAll() {
   clearResult();
 }
 
+/**
+ * [방법 B: Normalizer Lookup]
+ * Upstage Agent API include: ["all"] 호출 시 반환되는 step_extract의 정밀 OCR additional_values와
+ * step_instruct의 check_item_evidence (field_name)를 1:1로 매핑하여 100% 정밀 BBox를 자동 결합합니다.
+ */
+function enrichEvidenceWithOcrCoordinates(extractResult, structuredResult) {
+  if (!extractResult || !structuredResult) return;
+
+  var docs = extractResult.documents || (extractResult.result && extractResult.result.documents) || [];
+  if (!Array.isArray(docs) || docs.length === 0) return;
+
+  // 1. 서류 타입별 additional_values 룩업 테이블 구축
+  var extractDocMap = {};
+  docs.forEach(function (d) {
+    if (!d) return;
+    var dt = String(d.document_type || d.schema_name || "").toLowerCase().replace(/_schema$/, "").trim();
+    if (!extractDocMap[dt]) extractDocMap[dt] = {};
+    var addVals = d.additional_values || {};
+    Object.keys(addVals).forEach(function (k) {
+      extractDocMap[dt][k] = addVals[k];
+    });
+  });
+
+  // 문서 타입 매칭 헬퍼
+  function findDocAddVals(docKey) {
+    var rawKey = String(docKey || "").toLowerCase().trim();
+    var normKey = typeof normalizeDocType === "function" ? normalizeDocType(rawKey) : rawKey;
+    if (extractDocMap[normKey]) return extractDocMap[normKey];
+    if (extractDocMap[rawKey]) return extractDocMap[rawKey];
+    var keys = Object.keys(extractDocMap);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (k === normKey || k.indexOf(normKey) >= 0 || normKey.indexOf(k) >= 0) {
+        return extractDocMap[k];
+      }
+    }
+    return null;
+  }
+
+  // BBox 좌표를 0~1 normalized Box로 변환하는 헬퍼 (A4 595.28 x 841.89 pt 기준)
+  function convertOcrLocationToBox(matchedVal) {
+    if (!matchedVal) return null;
+    var locs = matchedVal.locations || (Array.isArray(matchedVal) && matchedVal[0] && matchedVal[0].locations);
+    if (!locs || !locs.length) return null;
+
+    var firstLoc = locs[0];
+    var page = typeof firstLoc.page === "number" ? firstLoc.page : 1;
+    var bbox = firstLoc.bbox; // [x1, y1, x2, y2]
+    if (!Array.isArray(bbox) || bbox.length < 4) return null;
+
+    var isNormalized = bbox[2] <= 1.05 && bbox[3] <= 1.05 && bbox[0] >= 0 && bbox[1] >= 0;
+    var wDoc = isNormalized ? 1 : 595.28;
+    var hDoc = isNormalized ? 1 : 841.89;
+
+    var x1 = bbox[0] / wDoc;
+    var y1 = bbox[1] / hDoc;
+    var x2 = bbox[2] / wDoc;
+    var y2 = bbox[3] / hDoc;
+
+    return {
+      page: page,
+      boxes: [{
+        x: Math.min(x1, x2),
+        y: Math.min(y1, y2),
+        width: Math.abs(x2 - x1),
+        height: Math.abs(y2 - y1)
+      }],
+      text: matchedVal.value != null ? String(matchedVal.value) : ""
+    };
+  }
+
+  // 2. check_item_evidence 순회 및 source 주입
+  var evidenceList = structuredResult.check_item_evidence || [];
+  var generatedCheckResults = [];
+
+  evidenceList.forEach(function (row) {
+    if (!row || !row.documents) return;
+    var crDocMap = {};
+
+    Object.keys(row.documents).forEach(function (docKey) {
+      var docEv = row.documents[docKey];
+      if (!docEv) return;
+      var fName = docEv.field_name;
+      var addVals = findDocAddVals(docKey);
+      var matchedVal = (addVals && fName) ? addVals[fName] : null;
+
+      if (matchedVal) {
+        var src = convertOcrLocationToBox(matchedVal);
+        if (src) {
+          docEv.source = src;
+        }
+      }
+
+      crDocMap[docKey] = {
+        field_name: fName,
+        value: docEv.value,
+        source: docEv.source || null
+      };
+    });
+
+    generatedCheckResults.push({
+      check_item: row.check_item,
+      label: row.check_item_ko || row.check_item,
+      documents: crDocMap
+    });
+  });
+
+  // check_results가 없거나 비어있는 경우 자동 생성 주입
+  if (!structuredResult.check_results || structuredResult.check_results.length === 0) {
+    structuredResult.check_results = generatedCheckResults;
+  }
+
+  // 3. document_extract_evidence 순회 및 source 주입
+  if (structuredResult.document_extract_evidence) {
+    Object.keys(structuredResult.document_extract_evidence).forEach(function (docKey) {
+      var docGroup = structuredResult.document_extract_evidence[docKey];
+      if (!docGroup || typeof docGroup !== "object") return;
+      var addVals = findDocAddVals(docKey);
+      if (!addVals) return;
+
+      Object.keys(docGroup).forEach(function (fKey) {
+        var item = docGroup[fKey];
+        if (!item) return;
+        var fieldName = item.field_name || fKey;
+        var matchedVal = addVals[fieldName] || addVals[fKey];
+        if (matchedVal) {
+          var src = convertOcrLocationToBox(matchedVal);
+          if (src) item.source = src;
+        }
+      });
+    });
+  }
+}
+
 function normalizeResultPayload(parsed) {
   if (!parsed) return {};
   if (typeof parsed === "string") {
@@ -539,6 +674,28 @@ function normalizeResultPayload(parsed) {
       return {};
     }
   }
+
+  // Upstage Studio Agent include: ["all"] steps 복합 응답 대응
+  if (parsed && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+    var extractStep = parsed.steps.find(function (s) {
+      return s && (s.step_type === "extract" || s.step_name === "extract");
+    });
+    var instructStep = parsed.steps.find(function (s) {
+      return s && (s.step_type === "instruct" || (s.result && s.result.structured_result));
+    });
+
+    if (instructStep && instructStep.result) {
+      var structured = instructStep.result.structured_result || instructStep.result;
+      if (extractStep && extractStep.result) {
+        enrichEvidenceWithOcrCoordinates(extractStep.result, structured);
+      }
+      if (instructStep.result.human_summary && !structured.human_summary) {
+        structured.human_summary = instructStep.result.human_summary;
+      }
+      return structured;
+    }
+  }
+
   if (parsed && parsed.instruct_result) {
     if (parsed.instruct_result.structured_result) {
       return parsed.instruct_result.structured_result;
@@ -1126,21 +1283,28 @@ function renderChecklists(documentChecklists) {
 }
 
 function renderResult(parsed, finalJob) {
-  var data = normalizeResultPayload(parsed);
+  var rawSource = parsed || finalJob;
+  var data = normalizeResultPayload(rawSource);
   var rows = [];
   var overall = String(data.overall_status || "").toLowerCase();
   var alertLvl = String(data.overall_alert_level || "").toLowerCase();
 
-  // 최신 v7 구조 지원: parsed.check_results 우선 저장 (직접 BBox 좌표 포함)
-  currentCheckResults = (parsed && Array.isArray(parsed.check_results)) ? parsed.check_results : [];
+  // 방법 B (Normalizer Lookup) 지원: data.check_results (자동 생성 포함) 우선 저장
+  currentCheckResults = (data && Array.isArray(data.check_results) && data.check_results.length > 0)
+    ? data.check_results
+    : ((parsed && Array.isArray(parsed.check_results)) ? parsed.check_results : []);
 
-  var structured = (parsed && parsed.instruct_result && parsed.instruct_result.structured_result)
-    || (parsed && parsed.structured_result)
-    || data;
+  var structured = (data && data.comparison_matrix)
+    ? data
+    : ((parsed && parsed.instruct_result && parsed.instruct_result.structured_result)
+      || (parsed && parsed.structured_result)
+      || data);
 
-  currentCheckItemEvidence = (structured && Array.isArray(structured.check_item_evidence))
-    ? structured.check_item_evidence
-    : ((data && Array.isArray(data.check_item_evidence)) ? data.check_item_evidence : []);
+  currentCheckItemEvidence = (data && Array.isArray(data.check_item_evidence))
+    ? data.check_item_evidence
+    : ((structured && Array.isArray(structured.check_item_evidence))
+      ? structured.check_item_evidence
+      : []);
 
   currentRawPayload = finalJob || parsed;
   els.rawJson.textContent = JSON.stringify(currentRawPayload, null, 2);
@@ -1267,7 +1431,7 @@ function validateUploadedFile(uploaded) {
 function createJob(apiKey, fileId, configId) {
   var body = {
     model: CONFIG.agentId,
-    include: ["last"],
+    include: ["all"],
     input: [
       {
         role: "user",
@@ -1305,7 +1469,7 @@ function createJob(apiKey, fileId, configId) {
 }
 
 function getJob(apiKey, jobId) {
-  var endpoint = getApiEndpoint("/responses/" + encodeURIComponent(jobId) + "?include[]=last");
+  var endpoint = getApiEndpoint("/responses/" + encodeURIComponent(jobId) + "?include[]=all");
 
   return fetch(endpoint, {
     method: "GET",
@@ -1351,6 +1515,11 @@ function pollJob(apiKey, jobId) {
 
 function extractResultText(finalJob) {
   if (!finalJob) return null;
+
+  // 0) steps가 포함된 Agent 풀 워크플로우 응답 (include: ["all"])
+  if (Array.isArray(finalJob.steps) && finalJob.steps.length > 0) {
+    return finalJob;
+  }
 
   // 1) output_text (최신 Studio Agent shortcut)
   if (finalJob.output_text) {
@@ -1653,6 +1822,9 @@ function fillSample(sampleIndex) {
   } else if (idx === 4) {
     fileName = "sample4.json";
     sampleTitle = "가상MisMatch샘플";
+  } else if (idx === 6) {
+    fileName = "sample6.json";
+    sampleTitle = "현대로템 도착서류 Set (정밀 OCR BBox 6종)";
   }
 
   if (els.fileInfo) {
@@ -1808,10 +1980,11 @@ function init() {
       if (els.sampleBtn3) els.sampleBtn3.addEventListener("click", function () { fillSample(3); });
       if (els.sampleBtn4) els.sampleBtn4.addEventListener("click", function () { fillSample(4); });
       if (els.sampleBtn5) els.sampleBtn5.addEventListener("click", function () { fillSample(5); });
+      if (els.sampleBtn6) els.sampleBtn6.addEventListener("click", function () { fillSample(6); });
       if (els.sampleSelect) {
         els.sampleSelect.addEventListener("change", function (e) {
           var val = parseInt(e.target.value, 10);
-          if (val >= 1 && val <= 5) {
+          if (val >= 1 && val <= 6) {
             fillSample(val);
           }
         });
@@ -1888,6 +2061,32 @@ var SAMPLE_DOC_REGISTRY = {
       coo: 1,
       certificate_of_origin: 1,
       other_document: 1
+    }
+  },
+  6: {
+    name: "현대로템 도착서류 Set",
+    pdfPath: "./docs/sample6_hyundai_rotem.pdf",
+    totalPages: 10,
+    sections: [
+      { page: 1, label: "신용장 (p.1)", title: "신용장 L/C (p.1)" },
+      { page: 2, label: "L/C조건 (p.2)", title: "신용장 L/C 조건 (p.2)" },
+      { page: 3, label: "상업송장 (p.3)", title: "COMMERCIAL INVOICE (p.3)" },
+      { page: 4, label: "선하증권 (p.4)", title: "BILL OF LADING (p.4)" },
+      { page: 5, label: "패킹리스트 (p.5)", title: "PACKING LIST (p.5)" },
+      { page: 6, label: "해상보험 (p.6)", title: "INSURANCE CERTIFICATE (p.6)" },
+      { page: 7, label: "원산지증명 (p.7)", title: "CERTIFICATE OF ORIGIN (p.7)" }
+    ],
+    docPages: {
+      lc: 1,
+      invoice: 3,
+      commercial_invoice: 3,
+      bl: 4,
+      bill_of_lading: 4,
+      packing_list: 5,
+      insurance: 6,
+      marine_cargo_insurance: 6,
+      coo: 7,
+      certificate_of_origin: 7
     }
   }
 };
@@ -2117,11 +2316,34 @@ function setViewerZoom(newZoom) {
 }
 
 function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
-  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
-  if (sIdx !== 1 && sIdx !== 2) sIdx = 1;
+  var sIdx = sampleIdx || currentActiveSampleIndex || 6;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[6] || SAMPLE_DOC_REGISTRY[1];
 
-  docViewerState.sampleIdx = sIdx;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx];
+  var pdfSource = null;
+  var docDisplayName = reg.name;
+  var sourceKey = "";
+
+  // 1) 사용자가 직접 업로드한 로컬 파일이 있는 경우 (GitHub/서버 업로드 없이 브라우저 메모리 Blob URL로 즉시 로드)
+  if (selectedFile && selectedFile instanceof Blob) {
+    if (!docViewerState.uploadedBlobUrl || docViewerState.loadedFileRef !== selectedFile) {
+      if (docViewerState.uploadedBlobUrl) {
+        try { URL.revokeObjectURL(docViewerState.uploadedBlobUrl); } catch (e) {}
+      }
+      docViewerState.uploadedBlobUrl = URL.createObjectURL(selectedFile);
+      docViewerState.loadedFileRef = selectedFile;
+    }
+    pdfSource = docViewerState.uploadedBlobUrl;
+    docDisplayName = selectedFile.name;
+    sourceKey = "blob:" + selectedFile.name + "_" + selectedFile.size;
+  } else {
+    // 2) 샘플 데이터셋 모드
+    docViewerState.sampleIdx = sIdx;
+    pdfSource = reg.pdfPath;
+    docDisplayName = reg.name;
+    sourceKey = reg.pdfPath;
+  }
+
+  docViewerState.currentDocName = docDisplayName;
 
   // Open Modeless Floating Window
   if (els.docViewerFloating) {
@@ -2140,20 +2362,20 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 
-  // Load PDF if not loaded or if sample changed
-  if (!docViewerState.pdfDoc || docViewerState.loadedPdfPath !== reg.pdfPath) {
+  // Load PDF if not loaded or if document changed
+  if (!docViewerState.pdfDoc || docViewerState.loadedPdfPath !== sourceKey) {
     if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "flex";
     
     if (window.pdfjsLib) {
-      window.pdfjsLib.getDocument(reg.pdfPath).promise.then(function (pdf) {
+      window.pdfjsLib.getDocument(pdfSource).promise.then(function (pdf) {
         docViewerState.pdfDoc = pdf;
-        docViewerState.loadedPdfPath = reg.pdfPath;
-        docViewerState.totalPages = pdf.numPages || reg.totalPages;
+        docViewerState.loadedPdfPath = sourceKey;
+        docViewerState.totalPages = pdf.numPages || reg.totalPages || 1;
         renderViewerPage(pageToOpen, targetBox, targetLabel);
       }).catch(function (err) {
         console.error("PDF 로드 실패:", err);
         if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "none";
-        alert("PDF 서류 로드에 실패했습니다. (경로: " + reg.pdfPath + ")\n" + err.message);
+        alert("PDF 서류 로드에 실패했습니다. (" + docDisplayName + ")\n" + err.message);
       });
     } else {
       alert("PDF.js 라이브러리가 로드되지 않았습니다. 네트워크 연결을 확인하세요.");
@@ -2170,8 +2392,17 @@ function closeDocViewer() {
 
 function renderQuickNavTabs(sampleIdx) {
   if (!els.docQuickNav) return;
-  var reg = SAMPLE_DOC_REGISTRY[sampleIdx] || SAMPLE_DOC_REGISTRY[1];
+  var sIdx = sampleIdx || currentActiveSampleIndex || 6;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[6] || SAMPLE_DOC_REGISTRY[1];
   var sections = reg.sections || [];
+
+  // 사용자 업로드 파일인 경우 기본 페이지 섹션 자동 생성
+  if (selectedFile && docViewerState.totalPages > 1 && sections.length === 0) {
+    sections = [];
+    for (var i = 1; i <= docViewerState.totalPages; i++) {
+      sections.push({ page: i, label: "p." + i, title: selectedFile.name + " (" + i + "p)" });
+    }
+  }
 
   var html = "";
   sections.forEach(function (sec) {
@@ -2186,7 +2417,6 @@ function renderQuickNavTabs(sampleIdx) {
   btns.forEach(function (btn) {
     btn.addEventListener("click", function () {
       var p = parseInt(this.getAttribute("data-page"), 10);
-      // Quick Nav 탭 클릭 시에는 이전 타겟 하이라이트를 깔끔하게 해제
       docViewerState.targetBox = null;
       docViewerState.targetLabel = "";
       renderViewerPage(p);
@@ -2220,7 +2450,7 @@ function renderViewerPage(pageNum, targetBox, targetLabel) {
   }
 
   if (els.viewerDocBadge) {
-    els.viewerDocBadge.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> ' + escapeHtml(reg.name);
+    els.viewerDocBadge.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> ' + escapeHtml(docViewerState.currentDocName || reg.name);
   }
   if (els.viewerDocTitle) {
     els.viewerDocTitle.textContent = currentSec ? currentSec.title : ("서류 페이지 " + pageNum);

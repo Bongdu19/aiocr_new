@@ -392,6 +392,9 @@ function formatTableCellHtml(val) {
   if (lower === "not_available" || lower === "n/a" || lower === "미해당") {
     return '<span class="cell-val cell-val-subtle">미해당</span>';
   }
+  if (str.indexOf("?") >= 0) {
+    return '<span class="cell-val cell-val-warn" title="OCR 판독 불명확"><i class="bi bi-question-diamond"></i> ' + escapeHtml(str) + '</span>';
+  }
 
   return '<span class="cell-val cell-val-text">' + escapeHtml(str) + '</span>';
 }
@@ -1202,20 +1205,24 @@ function buildComparisonCellInfo(itemKey, docKey, docTitle, rawVal) {
   }
 
   // 3. Highlightable evidence with valid BBox
+  var isCorrupted = String(effectiveVal).indexOf("?") >= 0;
   if (hasEvidenceData) {
     if (evidenceDoc && canHighlight(evidenceDoc, docKey, itemKey)) {
       var targetInfo = getEvidenceTarget(currentActiveSampleIndex || 1, docKey, evidenceDoc, itemKey);
       var pNum = (targetInfo && targetInfo.page) ? targetInfo.page : 1;
+      var tip = isCorrupted
+        ? "클릭 시 " + docTitle + " 위치 확인 (p." + pNum + ") [판독 주의]"
+        : "클릭 시 " + docTitle + " 위치 확인 (p." + pNum + ")";
       return {
         canClick: true,
-        cellClass: "clickable-cell has-evidence",
-        tooltip: "클릭 시 " + docTitle + " 위치 확인 (p." + pNum + ")",
+        cellClass: "clickable-cell has-evidence" + (isCorrupted ? " cell-ocr-warn" : ""),
+        tooltip: tip,
         htmlVal: formatTableCellHtml(effectiveVal)
       };
     } else {
       return {
         canClick: false,
-        cellClass: "non-clickable-cell no-location",
+        cellClass: "non-clickable-cell no-location" + (isCorrupted ? " cell-ocr-warn" : ""),
         tooltip: "원문 위치 정보 없음 (값: " + effectiveVal + ")",
         htmlVal: formatTableCellHtml(effectiveVal)
       };

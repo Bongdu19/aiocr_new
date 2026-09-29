@@ -8,6 +8,7 @@ var currentRawPayload = null;
 var currentCheckItemEvidence = [];
 var currentCheckResults = [];
 var els = {};
+var currentActiveSampleIndex = 1;
 
 /**
  * Code.md v5/v7 Contract Helpers:
@@ -367,7 +368,7 @@ function formatDocValue(val) {
 }
 
 function formatTableCellHtml(val) {
-  if (val == null || val === "") {
+  if (val == null || val === "" || val === "-") {
     return '<span class="cell-val cell-val-subtle">-</span>';
   }
   var str = cleanText(val);
@@ -907,36 +908,91 @@ function normalizeResultPayload(parsed) {
       if (instructHumanSummary && !instructStructured.human_summary) {
         instructStructured.human_summary = instructHumanSummary;
       }
-      return instructStructured;
+      return enrichComparisonMatrix(instructStructured);
     }
   }
 
+  var resolved = null;
   if (parsed && parsed.instruct_result) {
-    if (parsed.instruct_result.structured_result) {
-      return parsed.instruct_result.structured_result;
-    }
-    return parsed.instruct_result;
-  }
-  if (parsed && parsed.structured_result) {
-    return parsed.structured_result;
-  }
-  if (parsed && parsed.content) {
+    resolved = parsed.instruct_result.structured_result || parsed.instruct_result;
+  } else if (parsed && parsed.structured_result) {
+    resolved = parsed.structured_result;
+  } else if (parsed && parsed.content) {
     if (typeof parsed.content === "string") {
       try {
         var inner = JSON.parse(parsed.content);
         if (inner.instruct_result) {
-          return inner.instruct_result.structured_result || inner.instruct_result;
+          resolved = inner.instruct_result.structured_result || inner.instruct_result;
+        } else {
+          resolved = inner.structured_result || inner;
         }
-        return inner.structured_result || inner;
       } catch (e) {}
     } else if (typeof parsed.content === "object") {
       if (parsed.content.instruct_result) {
-        return parsed.content.instruct_result.structured_result || parsed.content.instruct_result;
+        resolved = parsed.content.instruct_result.structured_result || parsed.content.instruct_result;
+      } else {
+        resolved = parsed.content.structured_result || parsed.content;
       }
-      return parsed.content.structured_result || parsed.content;
     }
   }
-  return parsed || {};
+
+  if (!resolved) resolved = parsed || {};
+  return enrichComparisonMatrix(resolved);
+}
+
+function enrichComparisonMatrix(structured) {
+  if (!structured) return structured;
+  var rows = structured.comparison_matrix;
+  if (!Array.isArray(rows) || rows.length === 0) return structured;
+
+  var evidenceList = structured.check_item_evidence || structured.check_results || currentCheckItemEvidence || currentCheckResults || [];
+
+  rows.forEach(function (row) {
+    if (!row) return;
+    if (!row.result && (row.status || row.judgment)) {
+      row.result = row.status || row.judgment;
+    }
+
+    var itemKey = row.check_item || row.check_item_ko || row.label;
+    var ev = evidenceList.find(function (e) {
+      if (!e) return false;
+      return e.check_item === itemKey || e.label === itemKey || e.check_item_ko === itemKey;
+    });
+
+    if (ev && ev.documents) {
+      var docMap = {
+        lc: ["lc"],
+        commercial_invoice: ["commercial_invoice", "invoice"],
+        bill_of_lading: ["bill_of_lading", "bl"],
+        packing_list: ["packing_list"],
+        marine_cargo_insurance: ["marine_cargo_insurance", "insurance"],
+        certificate_of_origin: ["certificate_of_origin", "coo"],
+        other_document: ["other_document", "other", "arrival_notice"]
+      };
+
+      Object.keys(docMap).forEach(function (stdKey) {
+        var aliases = docMap[stdKey];
+        var currentVal = null;
+        for (var i = 0; i < aliases.length; i++) {
+          if (row[aliases[i]] !== undefined && row[aliases[i]] !== null && row[aliases[i]] !== "") {
+            currentVal = row[aliases[i]];
+            break;
+          }
+        }
+        if (!currentVal) {
+          for (var j = 0; j < aliases.length; j++) {
+            var alias = aliases[j];
+            if (ev.documents[alias] && hasMeaningfulValue(ev.documents[alias].value)) {
+              row[stdKey] = ev.documents[alias].value;
+              break;
+            }
+          }
+        }
+      });
+    }
+  });
+
+  return structured;
 }
 
 function renderUsage(finalJob) {
@@ -1105,40 +1161,72 @@ function renderDateTimeline(dateChecks) {
  * - check_item_evidence가 있는 최신 응답: canHighlight 여부에 따라 셀 스타일 및 툴팁 분기
  * - 레거시 샘플(check_item_evidence 없음): 기존 정적 레지스트리 기반 클릭 지원
  */
+function hasMeaningfulValue(val) {
+  if (val === null || val === undefined) return false;
+  var s = String(val).trim();
+  return s !== "" && s !== "-" && s !== "미기재" && s !== "null" && s !== "undefined";
+}
+
+function isNegationOrStatusValue(val) {
+  if (!val) return false;
+  var s = String(val).trim().toLowerCase();
+  return s === "미해당" || s === "n/a" || s === "not_available" || s === "미제출" || s === "missing";
+}
+
 function buildComparisonCellInfo(itemKey, docKey, docTitle, rawVal) {
   var evidenceDoc = getEvidence(itemKey, docKey);
   var hasEvidenceData = (currentCheckResults && currentCheckResults.length > 0) || (currentCheckItemEvidence && currentCheckItemEvidence.length > 0);
 
-  var canClick = true;
-  var tooltip = "클릭 시 " + docTitle + " 위치 확인";
-  var cellClass = "clickable-cell";
-  var displayVal = rawVal;
+  var rawHas = hasMeaningfulValue(rawVal);
+  var evHas = evidenceDoc && hasMeaningfulValue(evidenceDoc.value);
+  var effectiveVal = rawHas ? rawVal : (evHas ? evidenceDoc.value : null);
 
+  // 1. If neither matrix rawVal nor evidence has any meaningful value
+  if (!hasMeaningfulValue(effectiveVal)) {
+    return {
+      canClick: false,
+      cellClass: "non-clickable-cell no-evidence empty-cell",
+      tooltip: docTitle + ": 해당 항목 기재 없음",
+      htmlVal: formatTableCellHtml("-")
+    };
+  }
+
+  // 2. Explicit negation or presence status (미해당, 미제출)
+  if (isNegationOrStatusValue(effectiveVal)) {
+    return {
+      canClick: false,
+      cellClass: "non-clickable-cell no-evidence",
+      tooltip: docTitle + ": " + formatDocValue(effectiveVal),
+      htmlVal: formatTableCellHtml(effectiveVal)
+    };
+  }
+
+  // 3. Highlightable evidence with valid BBox
   if (hasEvidenceData) {
     if (evidenceDoc && canHighlight(evidenceDoc, docKey, itemKey)) {
-      canClick = true;
-      cellClass = "clickable-cell has-evidence";
       var targetInfo = getEvidenceTarget(currentActiveSampleIndex || 1, docKey, evidenceDoc, itemKey);
       var pNum = (targetInfo && targetInfo.page) ? targetInfo.page : 1;
-      tooltip = "클릭 시 " + docTitle + " 위치 확인 (p." + pNum + ")";
-      if (!displayVal && evidenceDoc.value) displayVal = evidenceDoc.value;
-    } else if (evidenceDoc) {
-      canClick = false;
-      cellClass = "non-clickable-cell no-location";
-      tooltip = "원문 위치 정보 없음 (값: " + (evidenceDoc.value || "확인됨") + ")";
-      if (!displayVal && evidenceDoc.value) displayVal = evidenceDoc.value;
+      return {
+        canClick: true,
+        cellClass: "clickable-cell has-evidence",
+        tooltip: "클릭 시 " + docTitle + " 위치 확인 (p." + pNum + ")",
+        htmlVal: formatTableCellHtml(effectiveVal)
+      };
     } else {
-      canClick = false;
-      cellClass = "non-clickable-cell no-evidence";
-      tooltip = "해당 문서 근거 없음";
+      return {
+        canClick: false,
+        cellClass: "non-clickable-cell no-location",
+        tooltip: "원문 위치 정보 없음 (값: " + effectiveVal + ")",
+        htmlVal: formatTableCellHtml(effectiveVal)
+      };
     }
   }
 
   return {
-    canClick: canClick,
-    cellClass: cellClass,
-    tooltip: tooltip,
-    htmlVal: formatTableCellHtml(displayVal)
+    canClick: true,
+    cellClass: "clickable-cell",
+    tooltip: "클릭 시 " + docTitle + " 위치 확인",
+    htmlVal: formatTableCellHtml(effectiveVal)
   };
 }
 
@@ -1161,8 +1249,8 @@ function renderComparisonTable(rows) {
   var categoryOrder = [];
 
   var hasOtherDoc = rows.some(function (r) {
-    return r && r.other_document !== undefined && r.other_document !== null && r.other_document !== "";
-  });
+    return r && r.other_document !== undefined && r.other_document !== null && r.other_document !== "" && r.other_document !== "-";
+  }) || (currentActiveSampleIndex === 1 || currentActiveSampleIndex === 2 || currentActiveSampleIndex === 6);
 
   var catIcons = {
     "서류 구비 현황": '<i class="bi bi-folder2-open"></i>',
@@ -1190,7 +1278,7 @@ function renderComparisonTable(rows) {
     var critCount = 0;
 
     catRows.forEach(function (r) {
-      var res = String(r.result || "").toLowerCase();
+      var res = String(r.result || r.status || r.judgment || "").toLowerCase();
       if (
         res.indexOf("불일치") >= 0 ||
         res === "mismatch" ||
@@ -1207,9 +1295,11 @@ function renderComparisonTable(rows) {
         warnCount += 1;
       } else if (
         res.indexOf("일치") >= 0 ||
+        res.indexOf("구비") >= 0 ||
         res === "match" ||
         res === "ok" ||
-        res === "pass"
+        res === "pass" ||
+        res === "present"
       ) {
         matchCount += 1;
       }
@@ -1272,7 +1362,8 @@ function renderComparisonTable(rows) {
 
     /* Member Rows & Mobile Cards */
     catRows.forEach(function (row) {
-      var rowClass = rowHighlightClass(row.result);
+      var rowResult = row.result || row.status || row.judgment || "";
+      var rowClass = rowHighlightClass(rowResult);
       var itemTitle = row.check_item_ko || row.check_item || "-";
 
       var docCols = [
@@ -1290,7 +1381,7 @@ function renderComparisonTable(rows) {
       // Table Row
       html += '<tr class="' + rowClass + '">';
       html += '<td><strong class="item-title-cell">' + escapeHtml(cleanText(itemTitle)) + '</strong></td>';
-      html += '<td class="' + resultCellClass(row.result) + '">' + escapeHtml(koreanStatus(row.result)) + '</td>';
+      html += '<td class="' + resultCellClass(rowResult) + '">' + escapeHtml(koreanStatus(rowResult)) + '</td>';
 
       docCols.forEach(function (d) {
         var cInfo = buildComparisonCellInfo(row.check_item, d.key, d.title, d.val);
@@ -1303,7 +1394,7 @@ function renderComparisonTable(rows) {
       cardsHtml += '<div class="mobile-matrix-card ' + rowClass + '">';
       cardsHtml += '<div class="mobile-card-top">';
       cardsHtml += '<span class="mobile-card-title">' + escapeHtml(cleanText(itemTitle)) + '</span>';
-      cardsHtml += '<span class="' + badgeClass(row.result) + '">' + escapeHtml(koreanStatus(row.result)) + '</span>';
+      cardsHtml += '<span class="' + badgeClass(rowResult) + '">' + escapeHtml(koreanStatus(rowResult)) + '</span>';
       cardsHtml += '</div>';
       cardsHtml += '<div class="mobile-card-doc-grid">';
 
@@ -1338,6 +1429,9 @@ function renderComparisonTable(rows) {
   var allDocCells = document.querySelectorAll(".data-table td[data-check-item], .mobile-matrix-card .mobile-doc-item[data-check-item]");
   allDocCells.forEach(function (c) {
     c.addEventListener("click", function () {
+      if (this.classList.contains("non-clickable-cell") || this.classList.contains("empty-cell") || this.classList.contains("no-evidence") || this.classList.contains("no-location")) {
+        return;
+      }
       var itemKey = this.getAttribute("data-check-item");
       var doc = this.getAttribute("data-doc");
       openDocViewerWithCheckItem(itemKey, doc);
@@ -1577,6 +1671,8 @@ function renderResult(parsed, finalJob) {
 
   renderDocumentKeys(data.document_keys);
   renderDateTimeline(data.date_checks);
+  if (structured) enrichComparisonMatrix(structured);
+  if (data) enrichComparisonMatrix(data);
   rows = (structured && structured.comparison_matrix) || data.comparison_matrix || [];
   renderComparisonTable(rows);
   renderChecklists(data.document_checklists || (structured && (structured.checklist_results || structured.document_checklists)));
@@ -2297,7 +2393,8 @@ var SAMPLE_DOC_REGISTRY = {
       insurance: 7,
       marine_cargo_insurance: 7,
       coo: 1,
-      certificate_of_origin: 1
+      certificate_of_origin: 1,
+      other_document: 1
     }
   },
   2: {
@@ -3035,11 +3132,12 @@ function openDocViewerWithCheckItem(checkItemKey, docType) {
     return;
   }
 
-  // 2. JSON에 BBox가 없는 경우 명확히 안내 (mock 좌표로 대체하지 않음)
-  if (evidenceDoc) {
-    alert("해당 항목(" + (evidenceDoc.field_name || checkItemKey) + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + (evidenceDoc.value || "확인됨") + ")");
+  // 2. JSON에 BBox가 없는 경우 명확히 안내
+  var hasVal = evidenceDoc && hasMeaningfulValue(evidenceDoc.value);
+  if (hasVal) {
+    alert("해당 항목(" + (evidenceDoc.field_name || checkItemKey) + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + evidenceDoc.value + ")");
   } else {
-    alert("해당 서류에 대한 근거 데이터(Evidence)가 없습니다.");
+    alert("해당 서류에는 '" + checkItemKey + "' 관련 기재 내용이 없습니다.");
   }
 }
 

@@ -761,3 +761,8 @@ export function normalizeStudioResponse(raw: unknown): NormalizedResponse {
     documents,
   };
 }
+
+// ============================================================================
+// 4. 위치 정보 매핑 및 하이라이트 모듈 (Location Mapping & Highlights)
+// ============================================================================
+export * from "./location_mapper.ts";

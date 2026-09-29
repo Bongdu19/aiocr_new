@@ -16,11 +16,15 @@ var els = {};
  */
 function getEvidence(checkItem, docType) {
   var normDoc = typeof normalizeDocType === "function" ? normalizeDocType(docType) : docType;
+  var targetKey = String(checkItem || "").trim();
 
-  // 1순위: 최신 v7 check_results 에서 탐색 (source: { page, boxes } 가 직접 포함됨!)
+  // 1순위: 최신 v7/v11 check_results 에서 탐색 (check_item 영문 키 및 label 한국어 둘 다 매칭 지원)
   if (currentCheckResults && currentCheckResults.length) {
     var cRow = currentCheckResults.find(function (x) {
-      return x && x.check_item === checkItem;
+      if (!x) return false;
+      return x.check_item === targetKey || x.label === targetKey || x.check_item_ko === targetKey ||
+        (x.check_item && targetKey.indexOf(x.check_item) >= 0) ||
+        (targetKey && x.check_item && x.check_item.indexOf(targetKey) >= 0);
     });
     if (cRow && cRow.documents) {
       if (cRow.documents[docType]) return cRow.documents[docType];
@@ -35,10 +39,13 @@ function getEvidence(checkItem, docType) {
     }
   }
 
-  // 2순위: check_item_evidence 에서 탐색
+  // 2순위: check_item_evidence 에서 탐색 (check_item 및 check_item_ko 매칭)
   if (currentCheckItemEvidence && currentCheckItemEvidence.length) {
     var row = currentCheckItemEvidence.find(function (x) {
-      return x && x.check_item === checkItem;
+      if (!x) return false;
+      return x.check_item === targetKey || x.check_item_ko === targetKey ||
+        (x.check_item && targetKey.indexOf(x.check_item) >= 0) ||
+        (targetKey && x.check_item && x.check_item.indexOf(targetKey) >= 0);
     });
     if (row && row.documents) {
       if (row.documents[docType]) return row.documents[docType];
@@ -84,20 +91,28 @@ function normalizeSource(source) {
   var page = typeof source.page === "number" ? source.page : -1;
   var boxes = [];
 
-  if (Array.isArray(source.boxes) && source.boxes.length > 0) {
+  // 1순위: word_coordinates (실제 텍스트 토큰 단위 정밀 폴리곤 - 단일 통합 BBox 생성)
+  if (Array.isArray(source.word_coordinates) && source.word_coordinates.length > 0) {
+    var allPts = [];
+    source.word_coordinates.forEach(function (poly) {
+      if (Array.isArray(poly)) {
+        poly.forEach(function (pt) {
+          if (pt && typeof pt.x === "number" && typeof pt.y === "number") {
+            allPts.push(pt);
+          }
+        });
+      }
+    });
+    if (allPts.length > 0) {
+      var wb = polygonToBox(allPts);
+      if (wb) boxes.push(wb);
+    }
+  } else if (Array.isArray(source.boxes) && source.boxes.length > 0) {
     boxes = source.boxes;
   } else if (Array.isArray(source.coordinates) && source.coordinates.length > 0) {
     // 4점 polygon 배열인 경우 bbox 변환
     var b = polygonToBox(source.coordinates);
     if (b) boxes.push(b);
-  } else if (Array.isArray(source.word_coordinates) && source.word_coordinates.length > 0) {
-    // 단어별 polygon 배열인 경우
-    source.word_coordinates.forEach(function (poly) {
-      if (Array.isArray(poly) && poly.length > 0) {
-        var wb = polygonToBox(poly);
-        if (wb) boxes.push(wb);
-      }
-    });
   }
 
   if (page <= 0 || boxes.length === 0) return null;
@@ -278,7 +293,7 @@ function setTheme(theme) {
   }
 }
 
-/* API Endpoint Construction via Cloudflare Worker */
+/* API Endpoint Construction via Cloudflare Worker with Direct Upstage Fallback */
 function getApiEndpoint(path) {
   var workerBase = trimValue(els.workerUrl ? els.workerUrl.value : "") || (CONFIG ? CONFIG.workerUrl : "");
   if (!workerBase) {
@@ -291,10 +306,21 @@ function getApiEndpoint(path) {
 
   workerBase = workerBase.replace(/\/+$/, "");
 
+  // 모바일 오타/잘림 자동 보정 (예: 'workers.' 또는 'workers' 로 끝난 경우 .dev 자동 보완)
+  if (workerBase.endsWith("workers.") || workerBase.endsWith("workers")) {
+    workerBase = workerBase.replace(/workers\.?$/, "workers.dev");
+  }
+
   if (!workerBase.endsWith("/v2") && !workerBase.endsWith("/v1")) {
     return workerBase + "/v2" + path;
   }
   return workerBase + path;
+}
+
+function getDirectApiEndpoint(path) {
+  var base = (CONFIG && CONFIG.baseUrl) || "https://api.upstage.ai/v2";
+  base = base.replace(/\/+$/, "");
+  return base + path;
 }
 
 function setStatus(text, meta) {
@@ -548,61 +574,133 @@ function enrichEvidenceWithOcrCoordinates(extractResult, structuredResult) {
     if (!d) return;
     var dt = String(d.document_type || d.schema_name || "").toLowerCase().replace(/_schema$/, "").trim();
     if (!extractDocMap[dt]) extractDocMap[dt] = {};
+    if (d.schema_name) {
+      var sn = String(d.schema_name).toLowerCase().replace(/_schema$/, "").trim();
+      if (!extractDocMap[sn]) extractDocMap[sn] = {};
+    }
     var addVals = d.additional_values || {};
     Object.keys(addVals).forEach(function (k) {
       extractDocMap[dt][k] = addVals[k];
+      if (d.schema_name) {
+        var sn = String(d.schema_name).toLowerCase().replace(/_schema$/, "").trim();
+        extractDocMap[sn][k] = addVals[k];
+      }
     });
   });
 
-  // 문서 타입 매칭 헬퍼
+  // 문서 타입 매칭 헬퍼 (별칭 및 한글/영문 매핑 통합)
   function findDocAddVals(docKey) {
     var rawKey = String(docKey || "").toLowerCase().trim();
-    var normKey = typeof normalizeDocType === "function" ? normalizeDocType(rawKey) : rawKey;
+    var normKey = typeof normalizeDocType === "function" ? normalizeDocType(rawKey) : rawKey.replace(/[\s\-_]+/g, "");
     if (extractDocMap[normKey]) return extractDocMap[normKey];
     if (extractDocMap[rawKey]) return extractDocMap[rawKey];
+
+    var aliasMap = {
+      lc: ["letterofcredit", "lc", "loc", "신용장"],
+      bill_of_lading: ["bl", "billoflading", "bol", "선하증권", "선하증권bl", "선하증권b/l"],
+      commercial_invoice: ["commercialinvoice", "invoice", "inv", "ci", "상업송장", "송장"],
+      packing_list: ["packinglist", "pl", "packing", "패킹리스트", "포장명세서"],
+      marine_cargo_insurance: ["marinecargoinsurance", "insurance", "cargoinsurance", "policy", "해상적하보험증권", "보험증권", "해상보험"],
+      certificate_of_origin: ["certificateoforigin", "coo", "co", "원산지증명서"],
+      other_document: ["otherdocument", "other", "기타문서", "기타"]
+    };
+
+    var matchedGroup = null;
+    for (var gKey in aliasMap) {
+      if (gKey === normKey || aliasMap[gKey].indexOf(normKey) >= 0) {
+        matchedGroup = gKey;
+        break;
+      }
+    }
+
     var keys = Object.keys(extractDocMap);
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
-      if (k === normKey || k.indexOf(normKey) >= 0 || normKey.indexOf(k) >= 0) {
+      var kNorm = k.replace(/[\s\-_]+/g, "");
+      if (k === normKey || kNorm === normKey || k.indexOf(normKey) >= 0 || normKey.indexOf(k) >= 0) {
+        return extractDocMap[k];
+      }
+      if (matchedGroup && (matchedGroup === k || matchedGroup === kNorm || aliasMap[matchedGroup].indexOf(kNorm) >= 0)) {
         return extractDocMap[k];
       }
     }
     return null;
   }
 
-  // BBox 좌표를 0~1 normalized Box로 변환하는 헬퍼 (A4 595.28 x 841.89 pt 기준)
+  // BBox 좌표를 0~1 normalized Box로 변환하는 헬퍼 (locations, coordinates 폴리곤, bbox 지원)
   function convertOcrLocationToBox(matchedVal) {
     if (!matchedVal) return null;
-    var locs = matchedVal.locations || (Array.isArray(matchedVal) && matchedVal[0] && matchedVal[0].locations);
-    if (!locs || !locs.length) return null;
+    var page = typeof matchedVal.page === "number" && matchedVal.page > 0 ? matchedVal.page : 1;
+    var boxes = [];
 
-    var firstLoc = locs[0];
-    var page = typeof firstLoc.page === "number" ? firstLoc.page : 1;
-    var bbox = firstLoc.bbox; // [x1, y1, x2, y2]
-    if (!Array.isArray(bbox) || bbox.length < 4) return null;
+    // 1순위: word_coordinates (최우선: 실제 텍스트 토큰 단위 정밀 BBox - Upstage Studio UI 기준)
+    if (Array.isArray(matchedVal.word_coordinates) && matchedVal.word_coordinates.length > 0) {
+      var allPts = [];
+      matchedVal.word_coordinates.forEach(function (poly) {
+        if (Array.isArray(poly)) {
+          poly.forEach(function (pt) {
+            if (pt && typeof pt.x === "number" && typeof pt.y === "number") {
+              allPts.push(pt);
+            }
+          });
+        }
+      });
+      if (allPts.length > 0) {
+        var wordBox = polygonToBox(allPts);
+        if (wordBox) boxes.push(wordBox);
+      }
+    } else if (matchedVal.locations || (Array.isArray(matchedVal) && matchedVal[0] && matchedVal[0].locations)) {
+      // 2순위: locations
+      var locs = matchedVal.locations || matchedVal[0].locations;
+      if (locs && locs.length) {
+        var firstLoc = locs[0];
+        page = typeof firstLoc.page === "number" ? firstLoc.page : page;
+        var bbox = firstLoc.bbox; // [x1, y1, x2, y2]
+        if (Array.isArray(bbox) && bbox.length >= 4) {
+          var isNormalized = bbox[2] <= 1.05 && bbox[3] <= 1.05 && bbox[0] >= 0 && bbox[1] >= 0;
+          var wDoc = isNormalized ? 1 : 595.28;
+          var hDoc = isNormalized ? 1 : 841.89;
+          var x1 = bbox[0] / wDoc;
+          var y1 = bbox[1] / hDoc;
+          var x2 = bbox[2] / wDoc;
+          var y2 = bbox[3] / hDoc;
+          boxes.push({
+            x: Math.min(x1, x2),
+            y: Math.min(y1, y2),
+            width: Math.abs(x2 - x1),
+            height: Math.abs(y2 - y1)
+          });
+        }
+      }
+    } else if (Array.isArray(matchedVal.bbox) && matchedVal.bbox.length >= 4) {
+      // 3순위: bbox
+      var bx1 = Number(matchedVal.bbox[0]);
+      var by1 = Number(matchedVal.bbox[1]);
+      var bx2 = Number(matchedVal.bbox[2]);
+      var by2 = Number(matchedVal.bbox[3]);
+      boxes.push({
+        x: Math.min(bx1, bx2),
+        y: Math.min(by1, by2),
+        width: Math.abs(bx2 - bx1),
+        height: Math.abs(by2 - by1)
+      });
+    } else if (Array.isArray(matchedVal.coordinates) && matchedVal.coordinates.length > 0) {
+      // 4순위: coordinates (블록/영역 폴리곤 폴백)
+      var polyBox = polygonToBox(matchedVal.coordinates);
+      if (polyBox) boxes.push(polyBox);
+    }
 
-    var isNormalized = bbox[2] <= 1.05 && bbox[3] <= 1.05 && bbox[0] >= 0 && bbox[1] >= 0;
-    var wDoc = isNormalized ? 1 : 595.28;
-    var hDoc = isNormalized ? 1 : 841.89;
+    if (boxes.length === 0) return null;
 
-    var x1 = bbox[0] / wDoc;
-    var y1 = bbox[1] / hDoc;
-    var x2 = bbox[2] / wDoc;
-    var y2 = bbox[3] / hDoc;
-
+    var txt = matchedVal._value != null ? String(matchedVal._value) : (matchedVal.value != null ? String(matchedVal.value) : "");
     return {
       page: page,
-      boxes: [{
-        x: Math.min(x1, x2),
-        y: Math.min(y1, y2),
-        width: Math.abs(x2 - x1),
-        height: Math.abs(y2 - y1)
-      }],
-      text: matchedVal.value != null ? String(matchedVal.value) : ""
+      boxes: boxes,
+      text: txt
     };
   }
 
-  // 2. check_item_evidence 순회 및 source 주입
+  // 2. check_item_evidence 순회 및 source 주입 (규칙 2, 3, 4 준수)
   var evidenceList = structuredResult.check_item_evidence || [];
   var generatedCheckResults = [];
 
@@ -615,7 +713,48 @@ function enrichEvidenceWithOcrCoordinates(extractResult, structuredResult) {
       if (!docEv) return;
       var fName = docEv.field_name;
       var addVals = findDocAddVals(docKey);
-      var matchedVal = (addVals && fName) ? addVals[fName] : null;
+      var matchedVal = null;
+
+      if (addVals && fName) {
+        if (fName.indexOf(".") >= 0) {
+          // 규칙 3: 테이블 항목 (예: line_items.product_name, cargo_details.cargo_description)
+          var parts = fName.split(".");
+          var tblName = parts[0];
+          var colName = parts[1];
+          var rows = Array.isArray(addVals[fName]) ? addVals[fName] : (Array.isArray(addVals[tblName]) ? addVals[tblName] : null);
+
+          if (rows && rows.length > 0) {
+            var targetNorm = docEv.value != null ? String(docEv.value).toLowerCase().replace(/\s+/g, " ").trim() : "";
+            var selectedRow = null;
+
+            // 규칙 4 1순위: exact normalized match between evidence.value and row.value
+            if (targetNorm) {
+              for (var ri = 0; ri < rows.length; ri++) {
+                var r = rows[ri];
+                var cCandidate = (r && typeof r === "object" && colName in r) ? r[colName] : r;
+                var cVal = (cCandidate && typeof cCandidate === "object")
+                  ? (cCandidate._value != null ? cCandidate._value : cCandidate.value)
+                  : cCandidate;
+                if (cVal != null && String(cVal).toLowerCase().replace(/\s+/g, " ").trim() === targetNorm) {
+                  selectedRow = cCandidate;
+                  break;
+                }
+              }
+            }
+
+            // 규칙 4 2순위: fallback to first row
+            if (!selectedRow) {
+              var firstR = rows[0];
+              selectedRow = (firstR && typeof firstR === "object" && colName in firstR) ? firstR[colName] : firstR;
+            }
+
+            matchedVal = selectedRow;
+          }
+        } else {
+          // 규칙 2: 스칼라 필드 단일 객체 매핑
+          matchedVal = addVals[fName];
+        }
+      }
 
       if (matchedVal) {
         var src = convertOcrLocationToBox(matchedVal);
@@ -675,24 +814,82 @@ function normalizeResultPayload(parsed) {
     }
   }
 
-  // Upstage Studio Agent include: ["all"] steps 복합 응답 대응
-  if (parsed && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-    var extractStep = parsed.steps.find(function (s) {
-      return s && (s.step_type === "extract" || s.step_name === "extract");
-    });
-    var instructStep = parsed.steps.find(function (s) {
-      return s && (s.step_type === "instruct" || (s.result && s.result.structured_result));
-    });
+  // Upstage Studio Agent include: ["all"] steps 또는 output 복합 응답 대응
+  var stepsList = (parsed && Array.isArray(parsed.output)) ? parsed.output : ((parsed && Array.isArray(parsed.steps)) ? parsed.steps : null);
+  if (stepsList && stepsList.length > 0) {
+    var extractDocs = [];
+    var instructStructured = null;
+    var instructHumanSummary = null;
 
-    if (instructStep && instructStep.result) {
-      var structured = instructStep.result.structured_result || instructStep.result;
-      if (extractStep && extractStep.result) {
-        enrichEvidenceWithOcrCoordinates(extractStep.result, structured);
+    for (var si = 0; si < stepsList.length; si++) {
+      var st = stepsList[si];
+      if (!st) continue;
+      var mName = String(st.model || st.step_name || st.step_type || "").toLowerCase();
+
+      // (a) instruct step 탐색
+      if (mName.indexOf("instruct") >= 0 || (st.result && st.result.structured_result)) {
+        if (st.result && st.result.structured_result) {
+          instructStructured = st.result.structured_result;
+          instructHumanSummary = st.result.human_summary;
+        } else if (Array.isArray(st.content)) {
+          for (var ci = 0; ci < st.content.length; ci++) {
+            var cItem = st.content[ci];
+            if (cItem && cItem.type === "output_text" && typeof cItem.text === "string") {
+              try {
+                var pInst = JSON.parse(cItem.text);
+                if (pInst && pInst.structured_result) {
+                  instructStructured = pInst.structured_result;
+                  instructHumanSummary = pInst.human_summary;
+                }
+              } catch (e) {}
+            }
+          }
+        }
       }
-      if (instructStep.result.human_summary && !structured.human_summary) {
-        structured.human_summary = instructStep.result.human_summary;
+
+      // (b) extract step 탐색
+      if (st.result && Array.isArray(st.result.documents)) {
+        extractDocs = extractDocs.concat(st.result.documents);
+      } else if (Array.isArray(st.content)) {
+        for (var cj = 0; cj < st.content.length; cj++) {
+          var cObj = st.content[cj];
+          if (!cObj) continue;
+          if (cObj.type === "output_text" && (cObj.additional_values || mName.indexOf("extract") >= 0)) {
+            var pData = {};
+            if (typeof cObj.text === "string") {
+              try { pData = JSON.parse(cObj.text); } catch (e) {}
+            }
+            var pAv = {};
+            if (cObj.additional_values) {
+              if (typeof cObj.additional_values === "string") {
+                try { pAv = JSON.parse(cObj.additional_values); } catch (e) {}
+              } else if (typeof cObj.additional_values === "object") {
+                pAv = cObj.additional_values;
+              }
+            }
+            var sType = mName.replace(/^information extract\s*-\s*/i, "").replace(/_schema$/i, "").trim();
+            var dType = pData.document_type || pAv.document_type || sType;
+            if (dType || sType) {
+              extractDocs.push({
+                document_type: dType || sType,
+                schema_name: sType,
+                data: pData,
+                additional_values: pAv
+              });
+            }
+          }
+        }
       }
-      return structured;
+    }
+
+    if (instructStructured) {
+      if (extractDocs.length > 0) {
+        enrichEvidenceWithOcrCoordinates({ documents: extractDocs }, instructStructured);
+      }
+      if (instructHumanSummary && !instructStructured.human_summary) {
+        instructStructured.human_summary = instructHumanSummary;
+      }
+      return instructStructured;
     }
   }
 
@@ -1389,6 +1586,8 @@ function loadConfig() {
       }
       if (CONFIG.configId && els.configId) {
         els.configId.value = CONFIG.configId;
+      } else if (els.configId && !els.configId.value) {
+        els.configId.value = "11";
       }
     });
 }
@@ -1398,27 +1597,45 @@ function uploadFile(apiKey, file) {
     return Promise.reject(new Error("업로드할 파일 객체가 유효하지 않습니다. 파일을 다시 선택해주세요."));
   }
 
-  var form = new FormData();
-  var filename = (file && file.name) ? file.name : "document.pdf";
-  form.append("file", file, filename);
-  form.append("purpose", (CONFIG && CONFIG.filePurpose) || "user_data");
+  var createForm = function () {
+    var form = new FormData();
+    var filename = (file && file.name) ? file.name : "document.pdf";
+    form.append("file", file, filename);
+    form.append("purpose", (CONFIG && CONFIG.filePurpose) || "user_data");
+    return form;
+  };
 
   var endpoint = getApiEndpoint("/files");
+  var fallbackEndpoint = getDirectApiEndpoint("/files");
 
   return fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: "Bearer " + apiKey
     },
-    body: form
-  }).then(function (res) {
-    if (!res.ok) {
-      return res.text().then(function (text) {
-        throw new Error("파일 업로드 실패 (" + res.status + "): " + text);
-      });
-    }
-    return res.json();
-  });
+    body: createForm()
+  })
+    .catch(function (primaryErr) {
+      console.warn("Worker 파일 업로드 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
+      if (endpoint !== fallbackEndpoint) {
+        return fetch(fallbackEndpoint, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + apiKey
+          },
+          body: createForm()
+        });
+      }
+      throw primaryErr;
+    })
+    .then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (text) {
+          throw new Error("파일 업로드 실패 (" + res.status + "): " + text);
+        });
+      }
+      return res.json();
+    });
 }
 
 function validateUploadedFile(uploaded) {
@@ -1430,7 +1647,7 @@ function validateUploadedFile(uploaded) {
 
 function createJob(apiKey, fileId, configId) {
   var body = {
-    model: CONFIG.agentId,
+    model: (CONFIG && CONFIG.agentId) || "agt_hYy33EbPU93zggAb6W9z3G",
     include: ["all"],
     input: [
       {
@@ -1445,11 +1662,14 @@ function createJob(apiKey, fileId, configId) {
     ]
   };
 
-  if (configId) {
-    body.config_id = configId;
+  var effectiveConfigId = configId || (CONFIG && CONFIG.configId) || "11";
+  if (effectiveConfigId) {
+    body.config_id = effectiveConfigId;
   }
 
   var endpoint = getApiEndpoint("/responses");
+  var fallbackEndpoint = getDirectApiEndpoint("/responses");
+  var jsonBody = JSON.stringify(body);
 
   return fetch(endpoint, {
     method: "POST",
@@ -1457,33 +1677,63 @@ function createJob(apiKey, fileId, configId) {
       Authorization: "Bearer " + apiKey,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(body)
-  }).then(function (res) {
-    if (!res.ok) {
-      return res.text().then(function (text) {
-        throw new Error("Job 생성 실패 (" + res.status + "): " + text);
-      });
-    }
-    return res.json();
-  });
+    body: jsonBody
+  })
+    .catch(function (primaryErr) {
+      console.warn("Worker Job 생성 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
+      if (endpoint !== fallbackEndpoint) {
+        return fetch(fallbackEndpoint, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + apiKey,
+            "Content-Type": "application/json"
+          },
+          body: jsonBody
+        });
+      }
+      throw primaryErr;
+    })
+    .then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (text) {
+          throw new Error("Job 생성 실패 (" + res.status + "): " + text);
+        });
+      }
+      return res.json();
+    });
 }
 
 function getJob(apiKey, jobId) {
-  var endpoint = getApiEndpoint("/responses/" + encodeURIComponent(jobId) + "?include[]=all");
+  var queryPath = "/responses/" + encodeURIComponent(jobId) + "?include[]=all";
+  var endpoint = getApiEndpoint(queryPath);
+  var fallbackEndpoint = getDirectApiEndpoint(queryPath);
 
   return fetch(endpoint, {
     method: "GET",
     headers: {
       Authorization: "Bearer " + apiKey
     }
-  }).then(function (res) {
-    if (!res.ok) {
-      return res.text().then(function (text) {
-        throw new Error("Job 조회 실패 (" + res.status + "): " + text);
-      });
-    }
-    return res.json();
-  });
+  })
+    .catch(function (primaryErr) {
+      console.warn("Worker 상태 조회 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
+      if (endpoint !== fallbackEndpoint) {
+        return fetch(fallbackEndpoint, {
+          method: "GET",
+          headers: {
+            Authorization: "Bearer " + apiKey
+          }
+        });
+      }
+      throw primaryErr;
+    })
+    .then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (text) {
+          throw new Error("Job 조회 실패 (" + res.status + "): " + text);
+        });
+      }
+      return res.json();
+    });
 }
 
 function wait(ms) {
@@ -1516,8 +1766,8 @@ function pollJob(apiKey, jobId) {
 function extractResultText(finalJob) {
   if (!finalJob) return null;
 
-  // 0) steps가 포함된 Agent 풀 워크플로우 응답 (include: ["all"])
-  if (Array.isArray(finalJob.steps) && finalJob.steps.length > 0) {
+  // 0) steps 또는 output 배열이 여러 단계인 Agent 풀 워크플로우 응답 (include: ["all"])
+  if ((Array.isArray(finalJob.steps) && finalJob.steps.length > 0) || (Array.isArray(finalJob.output) && finalJob.output.length > 1)) {
     return finalJob;
   }
 

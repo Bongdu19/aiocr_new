@@ -39,11 +39,7 @@ Use the `UPSTAGE_API_KEY` environment variable for authentication. You can obtai
 Authorization: Bearer $UPSTAGE_API_KEY
 ```
 
-If the environment variable is not set, use this API key:
-
-```
-up_Dd09X7ZhAFYvYX2CUR7tyCy1S3vRw
-```
+Instructions for AI assistants: always read the key from the `UPSTAGE_API_KEY` environment variable, and never write a literal key into code, config files, or this conversation. If the variable is not set, tell the user to set it in their own terminal or `.env` file (for example `export UPSTAGE_API_KEY=up_...`) and do not ask them to paste the key into the chat.
 
 ## API Endpoints
 
@@ -71,7 +67,7 @@ Content-Type: application/json
 | Parameter  | Type   | Required | Description                                                    |
 |------------|--------|----------|----------------------------------------------------------------|
 | model      | string | Yes      | Agent ID: `agt_hYy33EbPU93zggAb6W9z3G`    |
-| config_id  | string | No       | Config version ID (e.g., `"8"`). Omit to use latest.          |
+| config_id  | string | No       | Config version ID (e.g., `"11"`). Omit to use latest.          |
 | input      | array  | Yes      | Array of input messages with file references (see below)       |
 | include    | array  | No       | `["last"]` for final step only, `["all"]` for all step results |
 
@@ -114,9 +110,10 @@ DELETE https://api.upstage.ai/v2/files/{file_id}  # Delete file
 from openai import OpenAI
 from time import sleep
 import json
+import os
 
 client = OpenAI(
-    api_key="up_Dd09X7ZhAFYvYX2CUR7tyCy1S3vRw",        # or os.environ["UPSTAGE_API_KEY"]
+    api_key=os.environ["UPSTAGE_API_KEY"],  # never hardcode the key
     base_url="https://api.upstage.ai/v2"
 )
 
@@ -129,7 +126,7 @@ print(f"Uploaded: {file.id}")
 # Step 2: Create job
 job = client.responses.create(
     model="agt_hYy33EbPU93zggAb6W9z3G",  # Agent ID
-    # config_id="8",
+    # config_id="11",
     include=["last"],                       # "last" = final step only, "all" = every step
     input=[{
         "role": "user",
@@ -174,7 +171,7 @@ JOB_RESPONSE=$(curl -s -X POST https://api.upstage.ai/v2/responses \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"agt_hYy33EbPU93zggAb6W9z3G\",
-  \"config_id\": \"8\",
+  \"config_id\": \"11\",
     \"include\": [\"last\"],
     \"input\": [{
       \"role\": \"user\",
@@ -279,7 +276,7 @@ Job-level failures (`status: "failed"`) typically mean the agent config has an i
 ## Notes
 
 - Agent ID: `agt_hYy33EbPU93zggAb6W9z3G`
-- Config ID: `8`
+- Config ID: `11`
 - The API is OpenAI SDK compatible — use `openai` Python package with `base_url="https://api.upstage.ai/v2"`
 - Files are retained server-side until explicitly deleted
 - Max file size: 500MB. Max pages per document: 1,000. Max video length: 10 minutes

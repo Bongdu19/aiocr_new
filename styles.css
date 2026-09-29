@@ -2440,15 +2440,21 @@ details.raw-json-details[open] {
 .highlight-box:hover {
   background: rgba(245, 158, 11, 0.45);
   box-shadow: 0 0 16px rgba(245, 158, 11, 0.7);
-  z-index: 10;
 }
 
 .highlight-box.target-active {
   background: rgba(37, 99, 235, 0.35) !important;
   border: 3px solid #2563eb !important;
   box-shadow: 0 0 24px rgba(37, 99, 235, 0.8) !important;
-  z-index: 20;
   animation: pulseBoxGlow 1.8s infinite;
+}
+
+.highlight-box.large-target-active {
+  pointer-events: none !important;
+}
+
+.highlight-box.large-target-active .highlight-box-label {
+  pointer-events: auto !important;
 }
 
 @keyframes pulseBoxGlow {

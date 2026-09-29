@@ -173,9 +173,7 @@ function initElements() {
   els.sampleBtn2 = getEl("sampleBtn2");
   els.sampleBtn3 = getEl("sampleBtn3");
   els.sampleBtn4 = getEl("sampleBtn4");
-  els.sampleBtn6 = getEl("sampleBtn6");
   els.sampleSelect = getEl("sampleSelect");
-  els.customSampleOption = getEl("customSampleOption");
   els.clearBtn = getEl("clearBtn");
   els.lookupJobId = getEl("lookupJobId");
   els.lookupBtn = getEl("lookupBtn");
@@ -711,6 +709,20 @@ function enrichEvidenceWithOcrCoordinates(extractResult, structuredResult) {
   evidenceList.forEach(function (row) {
     if (!row || !row.documents) return;
     var crDocMap = {};
+    var isFilePresence = row.check_item === "file_presence" ||
+                         row.check_item === "required_documents_presence" ||
+                         (row.check_item_ko && (row.check_item_ko.indexOf("서류 구비") >= 0 || row.check_item_ko.indexOf("서류구비") >= 0));
+
+    // 기타(도착통지서 등) 문서가 실제 추출 문서에 존재하지만 row.documents에 없는 경우 보강
+    if (isFilePresence && !row.documents.other_document) {
+      var otherAddVals = findDocAddVals("other_document");
+      if (otherAddVals) {
+        row.documents.other_document = {
+          field_name: "document_title",
+          value: "present"
+        };
+      }
+    }
 
     Object.keys(row.documents).forEach(function (docKey) {
       var docEv = row.documents[docKey];
@@ -719,7 +731,17 @@ function enrichEvidenceWithOcrCoordinates(extractResult, structuredResult) {
       var addVals = findDocAddVals(docKey);
       var matchedVal = null;
 
-      if (addVals && fName) {
+      // 🌟 사용자 코멘트 2 반영:
+      // 서류구비현황(file_presence) 항목은 Key No 대신 서류 종류(document_type / document_title)를 타깃으로 하이라이트
+      if (isFilePresence) {
+        fName = "document_type";
+        docEv.field_name = "document_type";
+        if (addVals) {
+          matchedVal = (addVals["document_type"] && addVals["document_type"].page > 0 ? addVals["document_type"] : null) ||
+                       addVals["document_title"] ||
+                       addVals["document_type"];
+        }
+      } else if (addVals && fName) {
         if (fName.indexOf(".") >= 0) {
           // 규칙 3: 테이블 항목 (예: line_items.product_name, cargo_details.cargo_description)
           var parts = fName.split(".");
@@ -767,11 +789,22 @@ function enrichEvidenceWithOcrCoordinates(extractResult, structuredResult) {
         }
       }
 
-      crDocMap[docKey] = {
-        field_name: fName,
-        value: docEv.value,
-        source: docEv.source || null
-      };
+      if (isFilePresence) {
+        var docNameStr = (matchedVal && (matchedVal._value || matchedVal.value)) || "구비됨";
+        docEv.value = "present";
+        crDocMap[docKey] = {
+          field_name: "document_type",
+          label: docNameStr,
+          value: "present",
+          source: docEv.source || null
+        };
+      } else {
+        crDocMap[docKey] = {
+          field_name: fName,
+          value: docEv.value,
+          source: docEv.source || null
+        };
+      }
     });
 
     generatedCheckResults.push({
@@ -950,6 +983,13 @@ function enrichComparisonMatrix(structured) {
 
   var evidenceList = structured.check_item_evidence || structured.check_results || currentCheckItemEvidence || currentCheckResults || [];
 
+  function isPresenceStatusWord(val) {
+    if (!val) return false;
+    var s = String(val).trim().toLowerCase();
+    return s === "present" || s === "missing" || s === "not_available" || s === "n/a" ||
+           s === "구비됨" || s === "미제출" || s === "미해당" || s === "있음" || s === "없음";
+  }
+
   rows.forEach(function (row) {
     if (!row) return;
     if (!row.result && (row.status || row.judgment)) {
@@ -957,6 +997,41 @@ function enrichComparisonMatrix(structured) {
     }
 
     var itemKey = row.check_item || row.check_item_ko || row.label;
+    var isFilePresence = itemKey === "file_presence" ||
+                         itemKey === "required_documents_presence" ||
+                         (row.check_item_ko && (row.check_item_ko.indexOf("서류 구비") >= 0 || row.check_item_ko.indexOf("서류구비") >= 0));
+
+    // 🌟 사용자 코멘트 2 반영:
+    // 서류 구비 현황(file_presence)은 문서 번호(Key No)나 일자가 아닌 "구비 여부(present / missing / not_available)"만 표시
+    if (isFilePresence) {
+      var dp = structured.document_presence || {};
+      var docMapPresence = {
+        commercial_invoice: dp.commercial_invoice !== false ? "present" : "missing",
+        bill_of_lading: dp.bill_of_lading !== false ? "present" : "missing",
+        packing_list: dp.packing_list !== false ? "present" : "missing",
+        marine_cargo_insurance: dp.marine_cargo_insurance !== false ? "present" : "missing",
+        certificate_of_origin: dp.certificate_of_origin ? "present" : "missing",
+        lc: dp.lc ? "present" : "not_available"
+      };
+
+      Object.keys(docMapPresence).forEach(function (stdKey) {
+        var cur = row[stdKey];
+        if (!cur || !isPresenceStatusWord(cur)) {
+          row[stdKey] = docMapPresence[stdKey];
+        }
+      });
+
+      // 기타(도착통지서 등) 문서 구비 여부
+      if (!row.other_document || !isPresenceStatusWord(row.other_document)) {
+        if (currentActiveSampleIndex === 1 || currentActiveSampleIndex === 2 || (structured.date_checks && structured.date_checks.arrival_notice_date)) {
+          row.other_document = "present";
+        }
+      }
+
+      // file_presence 항목은 evidence의 Key No(송장번호, B/L번호 등)로 덮어쓰지 않고 즉시 반환
+      return;
+    }
+
     var ev = evidenceList.find(function (e) {
       if (!e) return false;
       return e.check_item === itemKey || e.label === itemKey || e.check_item_ko === itemKey;
@@ -1257,7 +1332,7 @@ function renderComparisonTable(rows) {
 
   var hasOtherDoc = rows.some(function (r) {
     return r && r.other_document !== undefined && r.other_document !== null && r.other_document !== "" && r.other_document !== "-";
-  }) || (currentActiveSampleIndex === 1 || currentActiveSampleIndex === 2 || currentActiveSampleIndex === 6);
+  }) || (currentActiveSampleIndex === 1 || currentActiveSampleIndex === 2);
 
   var catIcons = {
     "서류 구비 현황": '<i class="bi bi-folder2-open"></i>',
@@ -2022,40 +2097,6 @@ function downloadJsonFile() {
   URL.revokeObjectURL(url);
 }
 
-function updateCustomSampleOptionUI() {
-  var savedCustom = localStorage.getItem("myCustomSample");
-  var opt = els.customSampleOption || getEl("customSampleOption");
-  if (!opt) return;
-
-  if (savedCustom) {
-    opt.style.display = "";
-    opt.disabled = false;
-    opt.hidden = false;
-  } else {
-    opt.style.display = "none";
-    opt.disabled = true;
-    opt.hidden = true;
-  }
-}
-
-function setAsCustomSample() {
-  if (!currentRawPayload) {
-    alert("샘플로 지정할 결과가 없습니다.");
-    return;
-  }
-  try {
-    localStorage.setItem("myCustomSample", JSON.stringify(currentRawPayload));
-    updateCustomSampleOptionUI();
-    if (els.sampleSelect) {
-      els.sampleSelect.value = "5";
-    }
-    fillSample(5);
-    alert("⭐ 현재 결과가 내 커스텀 샘플로 지정되었습니다!\n드롭다운 5번에 '5️⃣ ⭐ 내 지정 커스텀 샘플'이 활성화되었습니다.");
-  } catch (e) {
-    alert("저장 실패: " + e.message);
-  }
-}
-
 function runWorkflow() {
   var apiKey = trimValue(els.apiKey.value);
   var configId = trimValue(els.configId.value);
@@ -2067,7 +2108,7 @@ function runWorkflow() {
   }
 
   if (!selectedFile) {
-    if (sampleVal >= 1 && sampleVal <= 5) {
+    if (sampleVal >= 1 && sampleVal <= 4) {
       fillSample(sampleVal);
       return;
     }
@@ -2156,31 +2197,6 @@ function fillSample(sampleIndex) {
     els.sampleSelect.value = String(idx);
   }
 
-  if (idx === 5) {
-    var savedCustom = localStorage.getItem("myCustomSample");
-    if (!savedCustom) {
-      alert("지정된 커스텀 샘플이 없습니다. 먼저 결과를 '★ 내 결과 샘플로 지정' 버튼으로 저장해 주세요.");
-      return;
-    }
-    try {
-      var customJob = JSON.parse(savedCustom);
-      var customRawText = extractResultText(customJob);
-      var customParsed = parseResultText(customRawText);
-      renderResult(customParsed, customJob);
-      if (els.lookupJobId && customJob.id) {
-        els.lookupJobId.value = customJob.id;
-      }
-      if (els.fileInfo) {
-        els.fileInfo.innerHTML = "<strong>[샘플선택] ⭐ 내 지정 커스텀 샘플</strong> <span class=\"meta-text\">(저장됨)</span>";
-      }
-      setStatus("커스텀 샘플 결과 표시 중", "job_id=" + (customJob.id || "custom"));
-      return;
-    } catch (e) {
-      alert("커스텀 샘플 파싱 실패: " + e.message);
-      return;
-    }
-  }
-
   if (idx === 1) {
     fileName = "sample1.json";
     sampleTitle = "코오롱인더스트리 (실제샘플1)";
@@ -2193,9 +2209,6 @@ function fillSample(sampleIndex) {
   } else if (idx === 4) {
     fileName = "sample4.json";
     sampleTitle = "가상MisMatch샘플 (양하항·수량 불일치, PDF 6p)";
-  } else if (idx === 6) {
-    fileName = "sample6.json";
-    sampleTitle = "현대로템 도착서류 Set (정밀 OCR BBox 6종)";
   }
 
   if (els.fileInfo) {
@@ -2340,19 +2353,16 @@ function init() {
   loadConfig()
     .then(function () {
       bindFileEvents();
-      updateCustomSampleOptionUI();
       els.runBtn.addEventListener("click", runWorkflow);
       if (els.sampleBtn) els.sampleBtn.addEventListener("click", function () { fillSample(1); });
       if (els.sampleBtn1) els.sampleBtn1.addEventListener("click", function () { fillSample(1); });
       if (els.sampleBtn2) els.sampleBtn2.addEventListener("click", function () { fillSample(2); });
       if (els.sampleBtn3) els.sampleBtn3.addEventListener("click", function () { fillSample(3); });
       if (els.sampleBtn4) els.sampleBtn4.addEventListener("click", function () { fillSample(4); });
-      if (els.sampleBtn5) els.sampleBtn5.addEventListener("click", function () { fillSample(5); });
-      if (els.sampleBtn6) els.sampleBtn6.addEventListener("click", function () { fillSample(6); });
       if (els.sampleSelect) {
         els.sampleSelect.addEventListener("change", function (e) {
           var val = parseInt(e.target.value, 10);
-          if (val >= 1 && val <= 6) {
+          if (val >= 1 && val <= 4) {
             fillSample(val);
           }
         });
@@ -2361,7 +2371,6 @@ function init() {
       if (els.lookupBtn) els.lookupBtn.addEventListener("click", lookupExistingJob);
       if (els.copyJsonBtn) els.copyJsonBtn.addEventListener("click", copyJsonToClipboard);
       if (els.downloadJsonBtn) els.downloadJsonBtn.addEventListener("click", downloadJsonFile);
-      if (els.setAsSampleBtn) els.setAsSampleBtn.addEventListener("click", setAsCustomSample);
       clearResult();
       setStatus("대기 중", "cache_buster=v=" + getCacheBuster());
     })
@@ -2480,32 +2489,6 @@ var SAMPLE_DOC_REGISTRY = {
       marine_cargo_insurance: 5,
       coo: 6,
       certificate_of_origin: 6
-    }
-  },
-  6: {
-    name: "현대로템 도착서류 Set",
-    pdfPath: "./docs/sample6_hyundai_rotem.pdf",
-    totalPages: 10,
-    sections: [
-      { page: 1, label: "신용장 (p.1)", title: "신용장 L/C (p.1)" },
-      { page: 2, label: "L/C조건 (p.2)", title: "신용장 L/C 조건 (p.2)" },
-      { page: 3, label: "상업송장 (p.3)", title: "COMMERCIAL INVOICE (p.3)" },
-      { page: 4, label: "선하증권 (p.4)", title: "BILL OF LADING (p.4)" },
-      { page: 5, label: "패킹리스트 (p.5)", title: "PACKING LIST (p.5)" },
-      { page: 6, label: "해상보험 (p.6)", title: "INSURANCE CERTIFICATE (p.6)" },
-      { page: 7, label: "원산지증명 (p.7)", title: "CERTIFICATE OF ORIGIN (p.7)" }
-    ],
-    docPages: {
-      lc: 1,
-      invoice: 3,
-      commercial_invoice: 3,
-      bl: 4,
-      bill_of_lading: 4,
-      packing_list: 5,
-      insurance: 6,
-      marine_cargo_insurance: 6,
-      coo: 7,
-      certificate_of_origin: 7
     }
   }
 };
@@ -2735,8 +2718,8 @@ function setViewerZoom(newZoom) {
 }
 
 function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
-  var sIdx = sampleIdx || currentActiveSampleIndex || 6;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[6] || SAMPLE_DOC_REGISTRY[1];
+  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
 
   var pdfSource = null;
   var docDisplayName = reg.name;
@@ -2811,8 +2794,8 @@ function closeDocViewer() {
 
 function renderQuickNavTabs(sampleIdx) {
   if (!els.docQuickNav) return;
-  var sIdx = sampleIdx || currentActiveSampleIndex || 6;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[6] || SAMPLE_DOC_REGISTRY[1];
+  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
   var sections = reg.sections || [];
 
   // 사용자 업로드 파일인 경우 기본 페이지 섹션 자동 생성
@@ -2966,7 +2949,15 @@ function renderHighlightLayer(pageNum) {
     });
   }
 
-  // 🌟 3. targetBox와 가장 일치하는 "단 1개의 베스트 박스" 인덱스 선별 (오버랩 같이 찍히는 현상 원천 차단)
+  // 2. 박스 면적 계산 및 면적 내림차순 정렬 (큰 박스가 배경에 먼저 렌더링되고, 작은 박스가 전면에 위치)
+  pageBoxes.forEach(function (pb) {
+    pb.area = (pb.box.width || 0) * (pb.box.height || 0);
+  });
+  pageBoxes.sort(function (a, b) {
+    return b.area - a.area;
+  });
+
+  // 🌟 3. targetBox와 가장 일치하는 "단 1개의 베스트 박스" 인덱스 선별
   var bestTargetIdx = -1;
   var minDistance = 0.022; // 2.2% 이내로 엄격히 제한
 
@@ -2991,13 +2982,25 @@ function renderHighlightLayer(pageNum) {
   pageBoxes.forEach(function (pb, idx) {
     var b = pb.box;
     var isTarget = (idx === bestTargetIdx);
+    var area = pb.area || ((b.width || 0) * (b.height || 0));
+    var isLargeBox = area > 0.035; // 전체 페이지 면적의 3.5% 이상을 차지하는 대형 박스 (테이블 블록 등)
 
     var boxDiv = document.createElement("div");
-    boxDiv.className = "highlight-box" + (isTarget ? " target-active" : "");
+    // 🌟 사용자 코멘트 1 반영 (큰 박스 내 작은 박스 클릭 지원):
+    // 1) 큰 박스가 활성화된 경우 large-target-active 클래스 부여 -> 내부 작은 박스로 클릭 이벤트 통과
+    // 2) 작은 박스일수록 높은 z-index를 부여하여 전면에 노출 및 우선 선택 보장
+    boxDiv.className = "highlight-box" +
+      (isTarget ? " target-active" : "") +
+      (isTarget && isLargeBox ? " large-target-active" : "");
+
     boxDiv.style.left = (b.x * 100) + "%";
     boxDiv.style.top = (b.y * 100) + "%";
     boxDiv.style.width = (b.width * 100) + "%";
     boxDiv.style.height = (b.height * 100) + "%";
+
+    var baseZ = Math.max(10, Math.round(250 - Math.min(area, 1) * 200));
+    boxDiv.style.zIndex = isTarget ? (isLargeBox ? baseZ : 255) : baseZ;
+
     boxDiv.setAttribute("title", pb.label);
 
     if (isTarget) {
@@ -3040,12 +3043,15 @@ function renderHighlightLayer(pageNum) {
   // 5. 만약 targetBox가 목록에 없는 임의 위치라면, 파란색 타깃으로 단독 1개 추가 렌더링
   if (docViewerState.targetBox && bestTargetIdx === -1) {
     var tb = docViewerState.targetBox;
+    var tbArea = (tb.width || 0) * (tb.height || 0);
+    var tbIsLarge = tbArea > 0.035;
     var customDiv = document.createElement("div");
-    customDiv.className = "highlight-box target-active";
+    customDiv.className = "highlight-box target-active" + (tbIsLarge ? " large-target-active" : "");
     customDiv.style.left = (tb.x * 100) + "%";
     customDiv.style.top = (tb.y * 100) + "%";
     customDiv.style.width = (tb.width * 100) + "%";
     customDiv.style.height = (tb.height * 100) + "%";
+    customDiv.style.zIndex = tbIsLarge ? 150 : 255;
 
     if (docViewerState.targetLabel) {
       var customTag = document.createElement("span");

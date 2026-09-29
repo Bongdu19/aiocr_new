@@ -841,7 +841,15 @@ function normalizeResultPayload(parsed) {
                   instructStructured = pInst.structured_result;
                   instructHumanSummary = pInst.human_summary;
                 }
-              } catch (e) {}
+              } catch (e) {
+                try {
+                  var pInst2 = JSON.parse(cItem.text + "}");
+                  if (pInst2 && pInst2.structured_result) {
+                    instructStructured = pInst2.structured_result;
+                    instructHumanSummary = pInst2.human_summary;
+                  }
+                } catch (e2) {}
+              }
             }
           }
         }
@@ -883,6 +891,16 @@ function normalizeResultPayload(parsed) {
     }
 
     if (instructStructured) {
+      if (instructStructured.date_checks) {
+        var misplacedKeys = ["comparison_matrix", "document_checklists", "discrepancy_candidates", "check_item_evidence", "document_extract_evidence", "checklist_results"];
+        for (var mi = 0; mi < misplacedKeys.length; mi++) {
+          var mKey = misplacedKeys[mi];
+          if (instructStructured.date_checks[mKey] !== undefined && instructStructured[mKey] === undefined) {
+            instructStructured[mKey] = instructStructured.date_checks[mKey];
+            delete instructStructured.date_checks[mKey];
+          }
+        }
+      }
       if (extractDocs.length > 0) {
         enrichEvidenceWithOcrCoordinates({ documents: extractDocs }, instructStructured);
       }
@@ -2068,10 +2086,10 @@ function fillSample(sampleIndex) {
     sampleTitle = "현대로템 (실제샘플2)";
   } else if (idx === 3) {
     fileName = "sample3.json";
-    sampleTitle = "가상Match샘플";
+    sampleTitle = "가상Match샘플 (서류 정상 수용, PDF 6p)";
   } else if (idx === 4) {
     fileName = "sample4.json";
-    sampleTitle = "가상MisMatch샘플";
+    sampleTitle = "가상MisMatch샘플 (양하항·수량 불일치, PDF 6p)";
   } else if (idx === 6) {
     fileName = "sample6.json";
     sampleTitle = "현대로템 도착서류 Set (정밀 OCR BBox 6종)";
@@ -2088,9 +2106,6 @@ function fillSample(sampleIndex) {
   })
     .then(function (res) {
       if (!res.ok) {
-        if (idx === 2 || idx === 4) {
-          throw new Error(sampleTitle + " JSON 데이터가 준비 중입니다. 파일 제공 후 바로 확인 가능합니다.");
-        }
         throw new Error(fileName + " 로드 실패 (" + res.status + ")");
       }
       return res.json();
@@ -2311,6 +2326,56 @@ var SAMPLE_DOC_REGISTRY = {
       coo: 1,
       certificate_of_origin: 1,
       other_document: 1
+    }
+  },
+  3: {
+    name: "가상Match샘플",
+    pdfPath: "./docs/sample3_match.pdf",
+    totalPages: 6,
+    sections: [
+      { page: 1, label: "신용장 (p.1)", title: "SWIFT MT700 DOCUMENTARY CREDIT (신용장 L/C)" },
+      { page: 2, label: "상업송장 (p.2)", title: "COMMERCIAL INVOICE (상업송장)" },
+      { page: 3, label: "패킹리스트 (p.3)", title: "PACKING LIST (포장명세서)" },
+      { page: 4, label: "선하증권 (p.4)", title: "BILL OF LADING (선하증권 B/L)" },
+      { page: 5, label: "해상보험 (p.5)", title: "MARINE INSURANCE POLICY (해상적하보험증권)" },
+      { page: 6, label: "원산지증명 (p.6)", title: "CERTIFICATE OF ORIGIN (원산지증명서)" }
+    ],
+    docPages: {
+      lc: 1,
+      invoice: 2,
+      commercial_invoice: 2,
+      packing_list: 3,
+      bl: 4,
+      bill_of_lading: 4,
+      insurance: 5,
+      marine_cargo_insurance: 5,
+      coo: 6,
+      certificate_of_origin: 6
+    }
+  },
+  4: {
+    name: "가상MisMatch샘플",
+    pdfPath: "./docs/sample4_mismatch.pdf",
+    totalPages: 6,
+    sections: [
+      { page: 1, label: "신용장 (p.1)", title: "SWIFT MT700 DOCUMENTARY CREDIT (신용장 L/C)" },
+      { page: 2, label: "상업송장 (p.2)", title: "COMMERCIAL INVOICE (상업송장)" },
+      { page: 3, label: "패킹리스트 (p.3)", title: "PACKING LIST (포장명세서)" },
+      { page: 4, label: "선하증권 (p.4)", title: "BILL OF LADING (선하증권 B/L)" },
+      { page: 5, label: "해상보험 (p.5)", title: "MARINE INSURANCE POLICY (해상적하보험증권)" },
+      { page: 6, label: "원산지증명 (p.6)", title: "CERTIFICATE OF ORIGIN (원산지증명서)" }
+    ],
+    docPages: {
+      lc: 1,
+      invoice: 2,
+      commercial_invoice: 2,
+      packing_list: 3,
+      bl: 4,
+      bill_of_lading: 4,
+      insurance: 5,
+      marine_cargo_insurance: 5,
+      coo: 6,
+      certificate_of_origin: 6
     }
   },
   6: {

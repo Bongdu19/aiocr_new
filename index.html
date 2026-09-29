@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260922_03" />
+  <link rel="stylesheet" href="./styles.css?v=20260930_mobile" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 
@@ -218,15 +218,32 @@
     </main>
   </div>
 
+  <!-- 🌟 문서 뷰어 배경 딤 (모바일 터치 닫기 지원) 🌟 -->
+  <div id="docViewerBackdrop" class="doc-viewer-backdrop" style="display: none;"></div>
+
   <!-- 🌟 문서 뷰어 모달리스 플로팅 윈도우 (Modeless Draggable & Resizable Window) 🌟 -->
   <div id="docViewerFloating" class="doc-viewer-floating" style="display: none;">
+    <!-- 모바일 드래그/스와이프 다운 힌트 바 -->
+    <div class="mobile-swipe-handle-bar" id="mobileSwipeHandleBar">
+      <div class="swipe-pill"></div>
+    </div>
+
     <!-- 팝업 상단 툴바 헤더 (드래그 핸들 역할) -->
     <div class="doc-viewer-header" id="docViewerHeader">
-      <div class="doc-viewer-title-group">
-        <span class="drag-grip-icon" title="헤더를 드래그하여 창 이동"><i class="bi bi-grip-vertical"></i></span>
-        <span class="doc-badge" id="viewerDocBadge"><i class="bi bi-file-earmark-pdf-fill"></i> 코오롱인더스트리</span>
-        <h3 id="viewerDocTitle">상업송장 (COMMERCIAL INVOICE)</h3>
-        <span class="page-indicator" id="viewerPageIndicator">Page 3 / 12</span>
+      <div class="doc-viewer-header-top">
+        <div class="doc-viewer-title-group">
+          <span class="drag-grip-icon" title="헤더를 드래그하여 창 이동"><i class="bi bi-grip-vertical"></i></span>
+          <span class="doc-badge" id="viewerDocBadge"><i class="bi bi-file-earmark-pdf-fill"></i> 코오롱인더스트리</span>
+          <h3 id="viewerDocTitle">상업송장 (COMMERCIAL INVOICE)</h3>
+          <span class="page-indicator" id="viewerPageIndicator">Page 3 / 12</span>
+        </div>
+
+        <!-- 상단 닫기 및 윈도우 컨트롤 (모바일에서도 항상 우상단 고정 노출) -->
+        <div class="window-control-group header-actions">
+          <button id="viewerDockBtn" class="tool-btn btn-win-ctl" type="button" title="우측 분할 도킹 위치로 리셋"><i class="bi bi-layout-split"></i></button>
+          <button id="viewerMaxBtn" class="tool-btn btn-win-ctl" type="button" title="최대화 / 이전 크기 토글"><i class="bi bi-arrows-fullscreen"></i></button>
+          <button id="viewerCloseBtn" class="tool-btn btn-close-modal" type="button" title="닫기 (ESC)"><i class="bi bi-x-lg"></i></button>
+        </div>
       </div>
       
       <div class="doc-viewer-toolbar">
@@ -251,13 +268,6 @@
         <button id="viewerToggleHighlightBtn" class="tool-btn btn-highlight-active" type="button" title="바운딩 박스 표시 On/Off">
           <i class="bi bi-bounding-box"></i> <span>하이라이트 ON</span>
         </button>
-
-        <!-- 윈도우 조작 버튼들: 우측 도킹 / 최대화 / 닫기 -->
-        <div class="window-control-group">
-          <button id="viewerDockBtn" class="tool-btn btn-win-ctl" type="button" title="우측 분할 도킹 위치로 리셋"><i class="bi bi-layout-split"></i></button>
-          <button id="viewerMaxBtn" class="tool-btn btn-win-ctl" type="button" title="최대화 / 이전 크기 토글"><i class="bi bi-arrows-fullscreen"></i></button>
-          <button id="viewerCloseBtn" class="tool-btn btn-close-modal" type="button" title="닫기 (ESC)"><i class="bi bi-x-lg"></i></button>
-        </div>
       </div>
     </div>
 
@@ -284,11 +294,18 @@
       </div>
     </div>
 
-    <!-- 리사이즈 핸들 (우하단) -->
+    <!-- 모바일 전용 하단 고정 닫기 바 -->
+    <div id="viewerMobileBottomBar" class="viewer-mobile-bottom-bar">
+      <button id="viewerMobileCloseBtn" class="btn-mobile-close-action" type="button">
+        <i class="bi bi-x-circle-fill"></i>
+        <span>문서 뷰어 닫기</span>
+      </button>
+    </div>
+
+    <!-- 리사이즈 핸들 (우하단, 데스크톱용) -->
     <div class="doc-viewer-resizer" id="docViewerResizer" title="드래그하여 크기 조절"></div>
   </div>
-  </div>
 
-  <script src="./app.js?v=20260929_v11"></script>
+  <script src="./app.js?v=20260930_mobile"></script>
 </body>
 </html>

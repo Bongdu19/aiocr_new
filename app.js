@@ -208,9 +208,13 @@ function initElements() {
 
   /* Document Viewer Floating Window Elements */
   els.openDocViewerBtn = getEl("openDocViewerBtn");
+  els.docViewerBackdrop = getEl("docViewerBackdrop");
   els.docViewerFloating = getEl("docViewerFloating");
+  els.mobileSwipeHandleBar = getEl("mobileSwipeHandleBar");
   els.docViewerHeader = getEl("docViewerHeader");
   els.viewerCloseBtn = getEl("viewerCloseBtn");
+  els.viewerMobileBottomBar = getEl("viewerMobileBottomBar");
+  els.viewerMobileCloseBtn = getEl("viewerMobileCloseBtn");
   els.viewerDockBtn = getEl("viewerDockBtn");
   els.viewerMaxBtn = getEl("viewerMaxBtn");
   els.docViewerResizer = getEl("docViewerResizer");
@@ -1788,15 +1792,41 @@ function loadConfig() {
     });
 }
 
+function sanitizeUploadFilename(file) {
+  var filename = (file && typeof file.name === "string") ? file.name : "";
+  var mimeType = (file && typeof file.type === "string") ? file.type.toLowerCase() : "";
+  
+  var ext = "";
+  if (filename) {
+    var match = filename.match(/\.([a-zA-Z0-9]+)$/);
+    if (match) ext = match[1].toLowerCase();
+  }
+  
+  if (!ext) {
+    if (mimeType.indexOf("pdf") >= 0) ext = "pdf";
+    else if (mimeType.indexOf("jpeg") >= 0 || mimeType.indexOf("jpg") >= 0) ext = "jpg";
+    else if (mimeType.indexOf("png") >= 0) ext = "png";
+    else if (mimeType.indexOf("tiff") >= 0) ext = "tiff";
+    else ext = "pdf";
+  }
+
+  var baseName = filename ? filename.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_") : "document";
+  baseName = baseName.replace(/_+/g, "_").slice(0, 30);
+  if (!baseName || baseName === "_") {
+    baseName = "document_" + Date.now();
+  }
+  return baseName + "." + ext;
+}
+
 function uploadFile(apiKey, file) {
   if (!file || !(file instanceof Blob)) {
     return Promise.reject(new Error("업로드할 파일 객체가 유효하지 않습니다. 파일을 다시 선택해주세요."));
   }
 
+  var safeFilename = sanitizeUploadFilename(file);
   var createForm = function () {
     var form = new FormData();
-    var filename = (file && file.name) ? file.name : "document.pdf";
-    form.append("file", file, filename);
+    form.append("file", file, safeFilename);
     form.append("purpose", (CONFIG && CONFIG.filePurpose) || "user_data");
     return form;
   };
@@ -1804,33 +1834,35 @@ function uploadFile(apiKey, file) {
   var endpoint = getApiEndpoint("/files");
   var fallbackEndpoint = getDirectApiEndpoint("/files");
 
-  return fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + apiKey
-    },
-    body: createForm()
-  })
-    .catch(function (primaryErr) {
-      console.warn("Worker 파일 업로드 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
-      if (endpoint !== fallbackEndpoint) {
-        return fetch(fallbackEndpoint, {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer " + apiKey
-          },
-          body: createForm()
-        });
-      }
-      throw primaryErr;
-    })
-    .then(function (res) {
+  var doFetch = function (url) {
+    return fetch(url, {
+      method: "POST",
+      mode: "cors",
+      credentials: "omit",
+      headers: {
+        Authorization: "Bearer " + apiKey
+      },
+      body: createForm()
+    }).then(function (res) {
       if (!res.ok) {
         return res.text().then(function (text) {
           throw new Error("파일 업로드 실패 (" + res.status + "): " + text);
         });
       }
       return res.json();
+    });
+  };
+
+  return doFetch(endpoint)
+    .catch(function (primaryErr) {
+      console.warn("Worker 파일 업로드 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
+      if (endpoint !== fallbackEndpoint) {
+        return doFetch(fallbackEndpoint).catch(function (secErr) {
+          console.error("Upstage 직통 파일 업로드도 실패:", secErr);
+          throw new Error("파일 업로드 실패 (프록시 & 직통 모두 연결 실패): " + (secErr.message || primaryErr.message));
+        });
+      }
+      throw primaryErr;
     });
 }
 
@@ -1867,35 +1899,36 @@ function createJob(apiKey, fileId, configId) {
   var fallbackEndpoint = getDirectApiEndpoint("/responses");
   var jsonBody = JSON.stringify(body);
 
-  return fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + apiKey,
-      "Content-Type": "application/json"
-    },
-    body: jsonBody
-  })
-    .catch(function (primaryErr) {
-      console.warn("Worker Job 생성 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
-      if (endpoint !== fallbackEndpoint) {
-        return fetch(fallbackEndpoint, {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer " + apiKey,
-            "Content-Type": "application/json"
-          },
-          body: jsonBody
-        });
-      }
-      throw primaryErr;
-    })
-    .then(function (res) {
+  var doFetch = function (url) {
+    return fetch(url, {
+      method: "POST",
+      mode: "cors",
+      credentials: "omit",
+      headers: {
+        Authorization: "Bearer " + apiKey,
+        "Content-Type": "application/json"
+      },
+      body: jsonBody
+    }).then(function (res) {
       if (!res.ok) {
         return res.text().then(function (text) {
           throw new Error("Job 생성 실패 (" + res.status + "): " + text);
         });
       }
       return res.json();
+    });
+  };
+
+  return doFetch(endpoint)
+    .catch(function (primaryErr) {
+      console.warn("Worker Job 생성 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
+      if (endpoint !== fallbackEndpoint) {
+        return doFetch(fallbackEndpoint).catch(function (secErr) {
+          console.error("Upstage 직통 Job 생성도 실패:", secErr);
+          throw new Error("Job 생성 통신 실패: " + (secErr.message || primaryErr.message));
+        });
+      }
+      throw primaryErr;
     });
 }
 
@@ -1904,31 +1937,31 @@ function getJob(apiKey, jobId) {
   var endpoint = getApiEndpoint(queryPath);
   var fallbackEndpoint = getDirectApiEndpoint(queryPath);
 
-  return fetch(endpoint, {
-    method: "GET",
-    headers: {
-      Authorization: "Bearer " + apiKey
-    }
-  })
-    .catch(function (primaryErr) {
-      console.warn("Worker 상태 조회 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
-      if (endpoint !== fallbackEndpoint) {
-        return fetch(fallbackEndpoint, {
-          method: "GET",
-          headers: {
-            Authorization: "Bearer " + apiKey
-          }
-        });
+  var doFetch = function (url) {
+    return fetch(url, {
+      method: "GET",
+      mode: "cors",
+      credentials: "omit",
+      headers: {
+        Authorization: "Bearer " + apiKey
       }
-      throw primaryErr;
-    })
-    .then(function (res) {
+    }).then(function (res) {
       if (!res.ok) {
         return res.text().then(function (text) {
           throw new Error("Job 조회 실패 (" + res.status + "): " + text);
         });
       }
       return res.json();
+    });
+  };
+
+  return doFetch(endpoint)
+    .catch(function (primaryErr) {
+      console.warn("Worker 상태 조회 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
+      if (endpoint !== fallbackEndpoint) {
+        return doFetch(fallbackEndpoint);
+      }
+      throw primaryErr;
     });
 }
 
@@ -1939,20 +1972,33 @@ function wait(ms) {
 }
 
 function pollJob(apiKey, jobId) {
+  var consecutiveErrors = 0;
+  var maxConsecutiveErrors = 4;
+
   return new Promise(function (resolve, reject) {
     function loop() {
       getJob(apiKey, jobId)
         .then(function (job) {
-          setStatus("실행 상태: " + job.status, "job_id=" + job.id);
+          consecutiveErrors = 0;
+          setStatus("실행 상태: " + (job.status || "진행 중"), "job_id=" + job.id);
 
           if (job.status === "completed" || job.status === "failed") {
             resolve(job);
             return;
           }
 
-          wait(CONFIG.pollIntervalMs || 2500).then(loop);
+          wait((CONFIG && CONFIG.pollIntervalMs) || 2500).then(loop);
         })
-        .catch(reject);
+        .catch(function (err) {
+          consecutiveErrors++;
+          console.warn("Job 조회 일시 실패 (" + consecutiveErrors + "/" + maxConsecutiveErrors + "):", err);
+          if (consecutiveErrors < maxConsecutiveErrors) {
+            setStatus("네트워크 일시 재연결 시도 중 (" + consecutiveErrors + "/" + maxConsecutiveErrors + ")", "job_id=" + jobId);
+            wait(3000).then(loop);
+          } else {
+            reject(err);
+          }
+        });
     }
 
     loop();
@@ -2165,17 +2211,20 @@ function runWorkflow() {
       els.runBtn.disabled = false;
     })
     .catch(function (error) {
-      console.error(error);
+      console.error("Workflow Error:", error);
       setStatus("오류 발생", error.message);
 
-      if (String(error.message || "").indexOf("Failed to fetch") >= 0) {
+      var errMsg = String(error.message || "");
+      if (errMsg.indexOf("Failed to fetch") >= 0 || errMsg.indexOf("NetworkError") >= 0) {
         alert(
-          "CORS 통신 오류가 발생했습니다.\n" +
-          "Cloudflare Worker 서버 주소 (" + (els.workerUrl ? els.workerUrl.value : "") + ") 연결 상태를 확인해 주세요."
+          "CORS 또는 네트워크 통신 오류가 발생했습니다.\n\n" +
+          "• 모바일 Wi-Fi / LTE 데이터 연결 상태를 확인해 주세요.\n" +
+          "• 프록시 Worker 주소 (" + (els.workerUrl ? els.workerUrl.value : "") + ")가 차단되었거나 지연 중일 수 있습니다.\n" +
+          "• 잠시 후 다시 시도해 주세요."
         );
-      } else if (String(error.message || "").indexOf("No access to file") >= 0) {
+      } else if (errMsg.indexOf("No access to file") >= 0 || errMsg.indexOf("403") >= 0) {
         alert(
-          "업로드된 file_id를 현재 에이전트 실행에서 바로 사용할 수 없어 403이 발생했습니다."
+          "접근 권한 오류(403): 업로드된 파일 ID에 접근할 수 없거나 API 키 권한이 부족합니다."
         );
       } else {
         alert(error.message || "오류가 발생했습니다.");
@@ -2520,9 +2569,9 @@ function initFloatingWindowControls() {
   var header = els.docViewerHeader;
   if (!win || !header) return;
 
-  // 1. Draggable by Header
+  // 1. Desktop Draggable by Header
   header.addEventListener("mousedown", function (e) {
-    if (docViewerState.isMaximized) return;
+    if (window.innerWidth <= 768 || docViewerState.isMaximized) return;
     // Don't drag if clicking buttons or inputs in header
     if (e.target.closest("button") || e.target.closest("input")) return;
 
@@ -2545,7 +2594,7 @@ function initFloatingWindowControls() {
   });
 
   window.addEventListener("mousemove", function (e) {
-    if (!docViewerState.isDragging || !win) return;
+    if (!docViewerState.isDragging || !win || window.innerWidth <= 768) return;
 
     var dx = e.clientX - docViewerState.dragStartX;
     var dy = e.clientY - docViewerState.dragStartY;
@@ -2572,7 +2621,45 @@ function initFloatingWindowControls() {
     }
   });
 
-  // 2. Window Control Buttons
+  // 2. Mobile Swipe Down to Close Gesture
+  var touchStartY = 0;
+  var touchCurrentY = 0;
+  var swipeTargets = [header, els.mobileSwipeHandleBar].filter(Boolean);
+
+  swipeTargets.forEach(function (targetEl) {
+    targetEl.addEventListener("touchstart", function (e) {
+      if (window.innerWidth > 768) return;
+      if (e.target.closest("button") || e.target.closest("input")) return;
+      touchStartY = e.touches[0].clientY;
+      touchCurrentY = touchStartY;
+    }, { passive: true });
+
+    targetEl.addEventListener("touchmove", function (e) {
+      if (window.innerWidth > 768) return;
+      touchCurrentY = e.touches[0].clientY;
+      var diffY = touchCurrentY - touchStartY;
+      if (diffY > 10 && win) {
+        win.style.transform = "translateY(" + Math.min(diffY, 150) + "px)";
+        win.style.transition = "none";
+      }
+    }, { passive: true });
+
+    targetEl.addEventListener("touchend", function () {
+      if (window.innerWidth > 768) return;
+      var diffY = touchCurrentY - touchStartY;
+      if (win) {
+        win.style.transform = "";
+        win.style.transition = "";
+      }
+      if (diffY > 70) {
+        closeDocViewer();
+      }
+      touchStartY = 0;
+      touchCurrentY = 0;
+    }, { passive: true });
+  });
+
+  // 3. Window Control Buttons
   if (els.viewerDockBtn) {
     els.viewerDockBtn.addEventListener("click", resetFloatingDockPosition);
   }
@@ -2591,6 +2678,17 @@ function resetFloatingDockPosition() {
     els.viewerMaxBtn.innerHTML = '<i class="bi bi-arrows-fullscreen"></i>';
     els.viewerMaxBtn.title = "최대화";
   }
+
+  if (window.innerWidth <= 768) {
+    win.style.left = "";
+    win.style.top = "";
+    win.style.right = "";
+    win.style.bottom = "";
+    win.style.width = "";
+    win.style.height = "";
+    return;
+  }
+
   win.style.left = "auto";
   win.style.bottom = "auto";
   win.style.top = "70px";
@@ -2603,6 +2701,8 @@ function toggleFloatingMaximize() {
   var win = els.docViewerFloating;
   if (!win) return;
 
+  if (window.innerWidth <= 768) return; // 모바일은 이미 풀스크린
+
   docViewerState.isMaximized = !docViewerState.isMaximized;
   if (docViewerState.isMaximized) {
     win.classList.add("maximized");
@@ -2613,8 +2713,24 @@ function toggleFloatingMaximize() {
   } else {
     resetFloatingDockPosition();
   }
-  // Re-render current page to adjust canvas fit
   renderViewerPage(docViewerState.currentPage);
+}
+
+function fitViewerToWidth() {
+  if (!docViewerState.pdfDoc) return;
+  docViewerState.pdfDoc.getPage(docViewerState.currentPage).then(function (page) {
+    var vp1 = page.getViewport({ scale: 1.0 });
+    var bodyWidth = (els.docViewerBody && els.docViewerBody.clientWidth) ? els.docViewerBody.clientWidth : (window.innerWidth - 24);
+    var targetWidth = bodyWidth - (window.innerWidth <= 768 ? 16 : 36);
+    if (targetWidth > 50 && vp1.width > 0) {
+      var calcScale = Math.min(2.5, Math.max(0.4, targetWidth / vp1.width));
+      setViewerZoom(calcScale);
+    } else {
+      setViewerZoom(1.0);
+    }
+  }).catch(function () {
+    setViewerZoom(1.0);
+  });
 }
 
 function initDocViewerEvents() {
@@ -2626,9 +2742,31 @@ function initDocViewerEvents() {
     });
   }
 
+  // Multiple Close Triggers
   if (els.viewerCloseBtn) {
-    els.viewerCloseBtn.addEventListener("click", closeDocViewer);
+    els.viewerCloseBtn.addEventListener("click", function () {
+      closeDocViewer();
+    });
   }
+
+  if (els.viewerMobileCloseBtn) {
+    els.viewerMobileCloseBtn.addEventListener("click", function () {
+      closeDocViewer();
+    });
+  }
+
+  if (els.docViewerBackdrop) {
+    els.docViewerBackdrop.addEventListener("click", function () {
+      closeDocViewer();
+    });
+  }
+
+  // Android Hardware/Gesture Back Button Integration (popstate)
+  window.addEventListener("popstate", function () {
+    if (els.docViewerFloating && els.docViewerFloating.style.display !== "none") {
+      closeDocViewer(true);
+    }
+  });
 
   if (els.viewerPrevPageBtn) {
     els.viewerPrevPageBtn.addEventListener("click", function () {
@@ -2665,13 +2803,13 @@ function initDocViewerEvents() {
 
   if (els.viewerZoomOutBtn) {
     els.viewerZoomOutBtn.addEventListener("click", function () {
-      setViewerZoom(Math.max(0.6, docViewerState.zoom - 0.2));
+      setViewerZoom(Math.max(0.4, docViewerState.zoom - 0.2));
     });
   }
 
   if (els.viewerFitWidthBtn) {
     els.viewerFitWidthBtn.addEventListener("click", function () {
-      setViewerZoom(1.0);
+      fitViewerToWidth();
     });
   }
 
@@ -2705,6 +2843,22 @@ function initDocViewerEvents() {
       if (docViewerState.currentPage < docViewerState.totalPages) {
         renderViewerPage(docViewerState.currentPage + 1);
       }
+    }
+  });
+
+  // Window resize handler: adapt viewer size between mobile and desktop
+  window.addEventListener("resize", function () {
+    if (!els.docViewerFloating || els.docViewerFloating.style.display === "none") return;
+    if (window.innerWidth <= 768) {
+      els.docViewerFloating.style.left = "";
+      els.docViewerFloating.style.top = "";
+      els.docViewerFloating.style.right = "";
+      els.docViewerFloating.style.bottom = "";
+      els.docViewerFloating.style.width = "";
+      els.docViewerFloating.style.height = "";
+      if (els.docViewerBackdrop) els.docViewerBackdrop.style.display = "block";
+    } else {
+      if (els.docViewerBackdrop) els.docViewerBackdrop.style.display = "none";
     }
   });
 }
@@ -2747,9 +2901,33 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
 
   docViewerState.currentDocName = docDisplayName;
 
-  // Open Modeless Floating Window
+  var isMobile = window.innerWidth <= 768;
+
+  // Open Window & Reset Mobile inline positioning
   if (els.docViewerFloating) {
+    if (isMobile) {
+      els.docViewerFloating.style.left = "";
+      els.docViewerFloating.style.top = "";
+      els.docViewerFloating.style.right = "";
+      els.docViewerFloating.style.bottom = "";
+      els.docViewerFloating.style.width = "";
+      els.docViewerFloating.style.height = "";
+    }
     els.docViewerFloating.style.display = "flex";
+  }
+
+  // Backdrop on mobile
+  if (els.docViewerBackdrop) {
+    els.docViewerBackdrop.style.display = isMobile ? "block" : "none";
+  }
+
+  // Android back button integration
+  if (isMobile) {
+    if (!window.history.state || !window.history.state.modalDocViewer) {
+      try {
+        window.history.pushState({ modalDocViewer: true }, "");
+      } catch (e) {}
+    }
   }
 
   // Setup Quick Nav Tabs
@@ -2773,7 +2951,12 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
         docViewerState.pdfDoc = pdf;
         docViewerState.loadedPdfPath = sourceKey;
         docViewerState.totalPages = pdf.numPages || reg.totalPages || 1;
-        renderViewerPage(pageToOpen, targetBox, targetLabel);
+
+        if (isMobile) {
+          fitViewerToWidth();
+        } else {
+          renderViewerPage(pageToOpen, targetBox, targetLabel);
+        }
       }).catch(function (err) {
         console.error("PDF 로드 실패:", err);
         if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "none";
@@ -2783,13 +2966,28 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
       alert("PDF.js 라이브러리가 로드되지 않았습니다. 네트워크 연결을 확인하세요.");
     }
   } else {
-    renderViewerPage(pageToOpen, targetBox, targetLabel);
+    if (isMobile && !targetBox) {
+      fitViewerToWidth();
+    } else {
+      renderViewerPage(pageToOpen, targetBox, targetLabel);
+    }
   }
 }
 
-function closeDocViewer() {
-  if (!els.docViewerFloating) return;
-  els.docViewerFloating.style.display = "none";
+function closeDocViewer(fromPopstate) {
+  if (els.docViewerFloating) {
+    els.docViewerFloating.style.display = "none";
+  }
+  if (els.docViewerBackdrop) {
+    els.docViewerBackdrop.style.display = "none";
+  }
+
+  // Revert history state if closed by button/gesture instead of popstate
+  if (!fromPopstate && window.history.state && window.history.state.modalDocViewer) {
+    try {
+      window.history.back();
+    } catch (e) {}
+  }
 }
 
 function renderQuickNavTabs(sampleIdx) {

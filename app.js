@@ -161,6 +161,7 @@ function initElements() {
   els.apiKey = getEl("apiKey");
   els.workerUrl = getEl("workerUrl");
   els.configId = getEl("configId");
+  els.forceRefreshBtn = getEl("forceRefreshBtn");
   els.themeToggleBtn = getEl("themeToggleBtn");
   els.themeIcon = getEl("themeIcon");
   els.themeLabel = getEl("themeLabel");
@@ -1826,16 +1827,20 @@ function uploadFile(apiKey, file) {
   var safeFilename = sanitizeUploadFilename(file);
   var createForm = function () {
     var form = new FormData();
-    form.append("file", file, safeFilename);
+    try {
+      var safeFile = new File([file], safeFilename, { type: file.type || "application/octet-stream" });
+      form.append("file", safeFile);
+    } catch (e) {
+      form.append("file", file, safeFilename);
+    }
     form.append("purpose", (CONFIG && CONFIG.filePurpose) || "user_data");
     return form;
   };
 
   var endpoint = getApiEndpoint("/files");
-  var fallbackEndpoint = getDirectApiEndpoint("/files");
 
-  var doFetch = function (url) {
-    return fetch(url, {
+  var doFetch = function () {
+    return fetch(endpoint, {
       method: "POST",
       mode: "cors",
       credentials: "omit",
@@ -1846,24 +1851,41 @@ function uploadFile(apiKey, file) {
     }).then(function (res) {
       if (!res.ok) {
         return res.text().then(function (text) {
-          throw new Error("파일 업로드 실패 (" + res.status + "): " + text);
+          var parsedMsg = text;
+          try {
+            var j = JSON.parse(text);
+            if (j.error && j.error.message) parsedMsg = j.error.message;
+            else if (j.message) parsedMsg = j.message;
+          } catch (_) {}
+          throw new Error("파일 업로드 실패 (HTTP " + res.status + "): " + parsedMsg);
         });
       }
       return res.json();
     });
   };
 
-  return doFetch(endpoint)
-    .catch(function (primaryErr) {
-      console.warn("Worker 파일 업로드 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
-      if (endpoint !== fallbackEndpoint) {
-        return doFetch(fallbackEndpoint).catch(function (secErr) {
-          console.error("Upstage 직통 파일 업로드도 실패:", secErr);
-          throw new Error("파일 업로드 실패 (프록시 & 직통 모두 연결 실패): " + (secErr.message || primaryErr.message));
-        });
-      }
+  return doFetch().catch(function (primaryErr) {
+    var msg = String(primaryErr.message || "");
+    if (msg.indexOf("HTTP ") >= 0) {
       throw primaryErr;
+    }
+
+    console.warn("파일 업로드 1차 실패, 1.5초 후 재시도:", primaryErr);
+    setStatus("네트워크 지연 감지, 파일 업로드 재시도 중...", safeFilename);
+    return wait(1500).then(function () {
+      return doFetch();
+    }).catch(function (retryErr) {
+      console.error("파일 업로드 최종 실패:", retryErr);
+      var retryMsg = String(retryErr.message || "");
+      if (retryMsg.indexOf("Failed to fetch") >= 0 || retryMsg.indexOf("NetworkError") >= 0) {
+        throw new Error(
+          "프록시 서버(" + (els.workerUrl ? els.workerUrl.value : "") + ")에 연결할 수 없습니다. " +
+          "모바일 Wi-Fi/데이터 연결 상태를 확인하시거나 상단의 [캐시 새로고침]을 눌러주세요."
+        );
+      }
+      throw retryErr;
     });
+  });
 }
 
 function validateUploadedFile(uploaded) {
@@ -1896,11 +1918,10 @@ function createJob(apiKey, fileId, configId) {
   }
 
   var endpoint = getApiEndpoint("/responses");
-  var fallbackEndpoint = getDirectApiEndpoint("/responses");
   var jsonBody = JSON.stringify(body);
 
-  var doFetch = function (url) {
-    return fetch(url, {
+  var doFetch = function () {
+    return fetch(endpoint, {
       method: "POST",
       mode: "cors",
       credentials: "omit",
@@ -1912,57 +1933,56 @@ function createJob(apiKey, fileId, configId) {
     }).then(function (res) {
       if (!res.ok) {
         return res.text().then(function (text) {
-          throw new Error("Job 생성 실패 (" + res.status + "): " + text);
+          var parsedMsg = text;
+          try {
+            var j = JSON.parse(text);
+            if (j.error && j.error.message) parsedMsg = j.error.message;
+            else if (j.message) parsedMsg = j.message;
+          } catch (_) {}
+          throw new Error("Job 생성 실패 (HTTP " + res.status + "): " + parsedMsg);
         });
       }
       return res.json();
     });
   };
 
-  return doFetch(endpoint)
-    .catch(function (primaryErr) {
-      console.warn("Worker Job 생성 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
-      if (endpoint !== fallbackEndpoint) {
-        return doFetch(fallbackEndpoint).catch(function (secErr) {
-          console.error("Upstage 직통 Job 생성도 실패:", secErr);
-          throw new Error("Job 생성 통신 실패: " + (secErr.message || primaryErr.message));
-        });
-      }
+  return doFetch().catch(function (primaryErr) {
+    var msg = String(primaryErr.message || "");
+    if (msg.indexOf("HTTP ") >= 0) {
       throw primaryErr;
+    }
+    console.warn("Job 생성 1차 실패, 재시도 중:", primaryErr);
+    return wait(1500).then(function () {
+      return doFetch();
     });
+  });
 }
 
 function getJob(apiKey, jobId) {
   var queryPath = "/responses/" + encodeURIComponent(jobId) + "?include[]=all";
   var endpoint = getApiEndpoint(queryPath);
-  var fallbackEndpoint = getDirectApiEndpoint(queryPath);
 
-  var doFetch = function (url) {
-    return fetch(url, {
-      method: "GET",
-      mode: "cors",
-      credentials: "omit",
-      headers: {
-        Authorization: "Bearer " + apiKey
-      }
-    }).then(function (res) {
-      if (!res.ok) {
-        return res.text().then(function (text) {
-          throw new Error("Job 조회 실패 (" + res.status + "): " + text);
-        });
-      }
-      return res.json();
-    });
-  };
-
-  return doFetch(endpoint)
-    .catch(function (primaryErr) {
-      console.warn("Worker 상태 조회 실패 (CORS/네트워크), Upstage 직통 연결 시도:", primaryErr);
-      if (endpoint !== fallbackEndpoint) {
-        return doFetch(fallbackEndpoint);
-      }
-      throw primaryErr;
-    });
+  return fetch(endpoint, {
+    method: "GET",
+    mode: "cors",
+    credentials: "omit",
+    headers: {
+      Authorization: "Bearer " + apiKey
+    }
+  }).then(function (res) {
+    if (!res.ok) {
+      return res.text().then(function (text) {
+        var parsedMsg = text;
+        try {
+          var j = JSON.parse(text);
+          if (j.error && j.error.message) parsedMsg = j.error.message;
+          else if (j.message) parsedMsg = j.message;
+        } catch (_) {}
+        throw new Error("Job 상태 조회 실패 (HTTP " + res.status + "): " + parsedMsg);
+      });
+    }
+    return res.json();
+  });
 }
 
 function wait(ms) {
@@ -2164,7 +2184,8 @@ function runWorkflow() {
 
   clearResult();
   els.runBtn.disabled = true;
-  setStatus("파일 업로드 중...", "");
+  var fileSizeKb = selectedFile.size ? Math.round(selectedFile.size / 1024) : 0;
+  setStatus("파일 업로드 중 (" + fileSizeKb + " KB)...", selectedFile.name || "");
 
   uploadFile(apiKey, selectedFile)
     .then(validateUploadedFile)
@@ -2217,10 +2238,10 @@ function runWorkflow() {
       var errMsg = String(error.message || "");
       if (errMsg.indexOf("Failed to fetch") >= 0 || errMsg.indexOf("NetworkError") >= 0) {
         alert(
-          "CORS 또는 네트워크 통신 오류가 발생했습니다.\n\n" +
+          "통신 연결에 실패했습니다.\n\n" +
           "• 모바일 Wi-Fi / LTE 데이터 연결 상태를 확인해 주세요.\n" +
-          "• 프록시 Worker 주소 (" + (els.workerUrl ? els.workerUrl.value : "") + ")가 차단되었거나 지연 중일 수 있습니다.\n" +
-          "• 잠시 후 다시 시도해 주세요."
+          "• 상단의 [캐시 새로고침] 버튼을 눌러 최신 버전으로 갱신해 보세요.\n" +
+          "• 프록시 Worker 주소 (" + (els.workerUrl ? els.workerUrl.value : "") + ")가 차단되었거나 지연 중일 수 있습니다."
         );
       } else if (errMsg.indexOf("No access to file") >= 0 || errMsg.indexOf("403") >= 0) {
         alert(
@@ -2402,6 +2423,23 @@ function init() {
   loadConfig()
     .then(function () {
       bindFileEvents();
+      if (els.forceRefreshBtn) {
+        els.forceRefreshBtn.addEventListener("click", function () {
+          if (confirm("모바일/브라우저 캐시를 완전히 비우고 최신 버전으로 새로고침하시겠습니까?")) {
+            try {
+              if (window.caches) {
+                caches.keys().then(function (names) {
+                  names.forEach(function (name) { caches.delete(name); });
+                });
+              }
+              localStorage.removeItem("theme");
+              sessionStorage.clear();
+            } catch (e) {}
+            var cleanUrl = window.location.origin + window.location.pathname + "?v=" + Date.now();
+            window.location.replace(cleanUrl);
+          }
+        });
+      }
       els.runBtn.addEventListener("click", runWorkflow);
       if (els.sampleBtn) els.sampleBtn.addEventListener("click", function () { fillSample(1); });
       if (els.sampleBtn1) els.sampleBtn1.addEventListener("click", function () { fillSample(1); });

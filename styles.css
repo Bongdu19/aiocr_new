@@ -2015,6 +2015,39 @@ details.raw-json-details[open] {
    🌟 Document Viewer Modal & Bounding Box Highlighting Styles
    ========================================================================== */
 
+.force-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 12px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #cbd5e1);
+  color: var(--text-secondary, #64748b);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.force-refresh-btn:hover {
+  background: var(--bg-hover, #f1f5f9);
+  color: #2563eb;
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.force-refresh-btn:active {
+  transform: scale(0.97);
+}
+
+@media (max-width: 768px) {
+  .force-refresh-btn {
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+}
+
 .doc-viewer-trigger-btn {
   display: inline-flex;
   align-items: center;

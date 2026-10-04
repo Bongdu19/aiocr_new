@@ -5,5 +5,10 @@
   "configId": "11",
   "pollIntervalMs": 2500,
   "filePurpose": "user_data",
-  "defaultApiKey": "up_Dd09X7ZhAFYvYX2CUR7tyCy1S3vRw"
+  "defaultApiKey": "up_Dd09X7ZhAFYvYX2CUR7tyCy1S3vRw",
+  "supabase": {
+    "url": "https://flrffghrpawqplilshwk.supabase.co",
+    "anonKey": "sb_publishable_NMA7ivy_KhNrxpiqN1INXQ_V_rLC5r4",
+    "storageBucket": "ocr-pdfs"
+  }
 }

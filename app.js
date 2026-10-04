@@ -9,6 +9,8 @@ var currentCheckItemEvidence = [];
 var currentCheckResults = [];
 var els = {};
 var currentActiveSampleIndex = 1;
+var supabaseClient = null;
+var currentCustomPdfUrl = null;
 
 /**
  * Code.md v5/v7 Contract Helpers:
@@ -2163,6 +2165,162 @@ function downloadJsonFile() {
   URL.revokeObjectURL(url);
 }
 
+/* ==========================================================================
+   Supabase Storage & DB Integration (Core Platform Pipeline)
+   ========================================================================== */
+
+function initSupabaseClient() {
+  if (CONFIG && CONFIG.supabase && CONFIG.supabase.url && CONFIG.supabase.anonKey && window.supabase) {
+    try {
+      supabaseClient = window.supabase.createClient(CONFIG.supabase.url, CONFIG.supabase.anonKey);
+      console.log("Supabase Client initialized successfully");
+    } catch (e) {
+      console.warn("Supabase Client initialization error:", e);
+    }
+  }
+}
+
+async function checkUrlParamAndLoadFromDb() {
+  try {
+    var urlParams = new URLSearchParams(window.location.search);
+    var recordId = urlParams.get("id");
+    if (!recordId || !supabaseClient) return;
+
+    var banner = document.getElementById("supabaseBanner");
+    var bannerText = document.getElementById("supabaseBannerText");
+    if (banner && bannerText) {
+      banner.style.display = "flex";
+      bannerText.innerHTML = '<i class="bi bi-hourglass-split" style="color: var(--accent-primary);"></i> <span>Supabase DB에서 점검 기록을 불러오는 중입니다...</span>';
+    }
+
+    var res = await supabaseClient
+      .from("ocr_history")
+      .select("*")
+      .eq("id", recordId)
+      .single();
+
+    if (res.error) throw res.error;
+    var data = res.data;
+    if (!data) throw new Error("해당 ID의 점검 기록을 찾을 수 없습니다.");
+
+    // Update banner
+    if (banner && bannerText) {
+      var isMatch = String(data.status || "").toUpperCase() === "MATCH";
+      var badgeHtml = isMatch
+        ? '<span style="color:#10b981; font-weight:700;"><i class="bi bi-check-circle-fill"></i> 정상 일치 (MATCH)</span>'
+        : '<span style="color:#ef4444; font-weight:700;"><i class="bi bi-exclamation-triangle-fill"></i> 불일치 (' + (data.mismatch_count || 1) + '건)</span>';
+      bannerText.innerHTML = `
+        <i class="bi bi-database-check" style="color:#10b981; font-size:18px;"></i>
+        <span><strong>[DB 점검 이력]</strong> ${escapeHtml(data.file_name)} · L/C: <strong>${escapeHtml(data.lc_no || "-")}</strong> · 수입자: <strong>${escapeHtml(data.applicant || "-")}</strong> · 판정: ${badgeHtml}</span>
+      `;
+    }
+
+    // Set file info in left panel
+    if (els.fileInfo) {
+      els.fileInfo.innerHTML = "<strong>[DB 이력] " + escapeHtml(data.file_name) + "</strong> <span class=\"meta-text\">(" + escapeHtml(data.storage_path || "") + ")</span>";
+    }
+
+    // Configure PDF viewer
+    currentCustomPdfUrl = data.pdf_url;
+    docViewerState.currentDocName = data.file_name;
+
+    // Render result
+    var rawText = extractResultText(data.result_json);
+    var parsed = parseResultText(rawText);
+    renderResult(parsed, data.result_json);
+
+    if (els.lookupJobId && data.id) {
+      els.lookupJobId.value = data.id;
+    }
+    setStatus("DB 이력 표시 중 (" + data.file_name + ")", "id=" + data.id);
+
+    // Auto open viewer
+    openDocViewer(null, 1);
+  } catch (err) {
+    console.error("DB Load Error:", err);
+    var banner = document.getElementById("supabaseBanner");
+    var bannerText = document.getElementById("supabaseBannerText");
+    if (banner && bannerText) {
+      banner.style.display = "flex";
+      bannerText.innerHTML = '<i class="bi bi-x-circle-fill" style="color:#ef4444;"></i> <span>DB 이력 로드 실패: ' + escapeHtml(err.message) + '</span>';
+    }
+  }
+}
+
+async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, finalJob, configId) {
+  if (!supabaseClient) return;
+  try {
+    var lcNo = (parsed.document_keys && parsed.document_keys.lc_number) || "-";
+    var applicant = "-";
+    var beneficiary = "-";
+    var mismatchCount = 0;
+
+    if (parsed.comparison_matrix && Array.isArray(parsed.comparison_matrix)) {
+      var buyerRow = parsed.comparison_matrix.find(function (x) {
+        return x.check_item === "buyer_party_consistency" || (x.check_item_ko && x.check_item_ko.indexOf("수입자") >= 0);
+      });
+      if (buyerRow) {
+        applicant = buyerRow.commercial_invoice || buyerRow.packing_list || buyerRow.lc || "-";
+      }
+
+      var sellerRow = parsed.comparison_matrix.find(function (x) {
+        return x.check_item === "seller_party_consistency" || (x.check_item_ko && x.check_item_ko.indexOf("수출자") >= 0);
+      });
+      if (sellerRow) {
+        beneficiary = sellerRow.commercial_invoice || sellerRow.bill_of_lading || sellerRow.lc || "-";
+      }
+
+      parsed.comparison_matrix.forEach(function (r) {
+        var res = String(r.result || r.status || "").toLowerCase();
+        if (res === "mismatch" || res === "fail" || res === "review_required" || res === "unclear") {
+          mismatchCount++;
+        }
+      });
+    }
+
+    var status = mismatchCount === 0 ? "MATCH" : "MISMATCH";
+    var bucket = (CONFIG.supabase && CONFIG.supabase.storageBucket) || "ocr-pdfs";
+
+    if (!pdfUrl && storagePath) {
+      var pub = supabaseClient.storage.from(bucket).getPublicUrl(storagePath);
+      pdfUrl = pub && pub.data ? pub.data.publicUrl : "";
+    }
+
+    var insertData = {
+      file_name: file.name,
+      storage_path: storagePath || ("pdfs/" + file.name),
+      pdf_url: pdfUrl || "",
+      file_size: file.size || 0,
+      total_pages: (docViewerState && docViewerState.totalPages) || 1,
+      lc_no: lcNo,
+      applicant: applicant,
+      beneficiary: beneficiary,
+      status: status,
+      mismatch_count: mismatchCount,
+      api_info: { model: finalJob.model || "agt_hYy33EbPU93zggAb6W9z3G", config_id: configId },
+      result_json: finalJob
+    };
+
+    var res = await supabaseClient.from("ocr_history").insert([insertData]);
+    if (!res.error) {
+      var banner = document.getElementById("supabaseBanner");
+      var bannerText = document.getElementById("supabaseBannerText");
+      if (banner && bannerText) {
+        banner.style.display = "flex";
+        bannerText.innerHTML = `
+          <i class="bi bi-cloud-check-fill" style="color: #10b981; font-size: 16px;"></i>
+          <span><strong>[Supabase DB 저장 완료]</strong> 서류 점검 데이터가 안전하게 등록되었습니다. (수입자: <strong>${escapeHtml(applicant)}</strong> / 수출자: <strong>${escapeHtml(beneficiary)}</strong>)</span>
+        `;
+      }
+      console.log("Saved to Supabase DB successfully!");
+    } else {
+      console.warn("Supabase DB Insert Error:", res.error);
+    }
+  } catch (err) {
+    console.error("Save to Supabase failed:", err);
+  }
+}
+
 function runWorkflow() {
   var apiKey = trimValue(els.apiKey.value);
   var configId = trimValue(els.configId.value);
@@ -2183,7 +2341,36 @@ function runWorkflow() {
   }
 
   clearResult();
+  currentCustomPdfUrl = null;
   els.runBtn.disabled = true;
+  var currentSelectedFile = selectedFile;
+  var supabasePublicUrl = null;
+  var supabaseStoragePath = null;
+
+  // Supabase Storage 비동기 업로드 개시 (사용자 핵심 요구사항 1단계)
+  if (currentSelectedFile && supabaseClient) {
+    try {
+      var bucket = (CONFIG.supabase && CONFIG.supabase.storageBucket) || "ocr-pdfs";
+      var filePath = "pdfs/" + Date.now() + "_" + encodeURIComponent(currentSelectedFile.name);
+      supabaseClient.storage.from(bucket).upload(filePath, currentSelectedFile, {
+        contentType: currentSelectedFile.type || "application/pdf",
+        upsert: false
+      }).then(function (upRes) {
+        if (!upRes.error) {
+          supabaseStoragePath = filePath;
+          var pub = supabaseClient.storage.from(bucket).getPublicUrl(filePath);
+          supabasePublicUrl = pub && pub.data ? pub.data.publicUrl : null;
+          currentCustomPdfUrl = supabasePublicUrl;
+          console.log("Supabase PDF uploaded successfully:", supabasePublicUrl);
+        } else {
+          console.warn("Supabase upload error:", upRes.error);
+        }
+      });
+    } catch (e) {
+      console.warn("Supabase Storage init upload error:", e);
+    }
+  }
+
   var fileSizeKb = selectedFile.size ? Math.round(selectedFile.size / 1024) : 0;
   setStatus("파일 업로드 중 (" + fileSizeKb + " KB)...", selectedFile.name || "");
 
@@ -2230,6 +2417,11 @@ function runWorkflow() {
       renderResult(parsed, finalJob);
       setStatus("완료", "job_id=" + currentJobId);
       els.runBtn.disabled = false;
+
+      // Supabase DB 1행 자동 INSERT (사용자 핵심 요구사항 3단계)
+      if (currentSelectedFile && supabaseClient) {
+        saveInspectionToSupabase(currentSelectedFile, supabaseStoragePath, supabasePublicUrl, parsed, finalJob, configId);
+      }
     })
     .catch(function (error) {
       console.error("Workflow Error:", error);
@@ -2422,7 +2614,9 @@ function init() {
 
   loadConfig()
     .then(function () {
+      initSupabaseClient();
       bindFileEvents();
+      checkUrlParamAndLoadFromDb();
       if (els.forceRefreshBtn) {
         els.forceRefreshBtn.addEventListener("click", function () {
           if (confirm("모바일/브라우저 캐시를 완전히 비우고 최신 버전으로 새로고침하시겠습니까?")) {
@@ -2917,8 +3111,13 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
   var docDisplayName = reg.name;
   var sourceKey = "";
 
-  // 1) 사용자가 직접 업로드한 로컬 파일이 있는 경우 (GitHub/서버 업로드 없이 브라우저 메모리 Blob URL로 즉시 로드)
-  if (selectedFile && selectedFile instanceof Blob) {
+  // 0) Supabase DB 저장 이력이나 공개 Storage URL이 있는 경우
+  if (currentCustomPdfUrl) {
+    pdfSource = currentCustomPdfUrl;
+    docDisplayName = docViewerState.currentDocName || "저장 서류 PDF";
+    sourceKey = currentCustomPdfUrl;
+  } else if (selectedFile && selectedFile instanceof Blob) {
+    // 1) 사용자가 직접 업로드한 로컬 파일이 있는 경우 (GitHub/서버 업로드 없이 브라우저 메모리 Blob URL로 즉시 로드)
     if (!docViewerState.uploadedBlobUrl || docViewerState.loadedFileRef !== selectedFile) {
       if (docViewerState.uploadedBlobUrl) {
         try { URL.revokeObjectURL(docViewerState.uploadedBlobUrl); } catch (e) {}

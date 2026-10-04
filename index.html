@@ -7,311 +7,237 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>신용장 서류 일치성 점검</title>
+  <title>신용장 무역 서류 일치성 검증 플랫폼 | AI-OCR 대시보드</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260930_v3" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <link rel="stylesheet" href="./styles.css?v=20261004_v1" />
+  <link rel="stylesheet" href="./dashboard.css?v=20261004_v1" />
+  <!-- Supabase CDN Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
-  <div class="container">
-    <header class="page-header">
-      <div class="header-title-group">
-        <p class="header-sub-eyebrow"><i class="bi bi-award-fill"></i> KDB AI 빅뱅 컨테스트 - Track3 : AI-OCR 활용</p>
-        <h1>신용장 서류 일치성 점검</h1>
-        <p class="subtext">무역 서류(LC, Invoice, B/L, Packing List, Insurance, COO) 일치성 자동 검증 대시보드</p>
+  <div class="dashboard-container">
+    <!-- Header -->
+    <header class="dashboard-header">
+      <div class="dashboard-title-group">
+        <div class="brand-eyebrow">
+          <i class="bi bi-shield-check"></i> KDB AI 빅뱅 컨테스트 - Track 3 : AI-OCR 플랫폼
+        </div>
+        <h1>신용장 무역 서류 일치성 검증 종합 플랫폼</h1>
+        <p class="subtext">
+          수입자(개설의뢰인) 및 수출자(수익자) 거래처별 서류 일치성 실시간 자동 점검 및 이력 대시보드
+        </p>
       </div>
-      <div class="header-actions">
-        <button id="forceRefreshBtn" class="btn force-refresh-btn" type="button" title="모바일 브라우저 캐시를 완전히 비우고 최신 버전으로 새로고침합니다">
-          <i class="bi bi-arrow-clockwise"></i> <span>캐시 새로고침</span>
+
+      <div class="header-btn-group">
+        <a href="inspect.html" class="btn-cta-primary">
+          <i class="bi bi-plus-circle-fill"></i>
+          <span>신규 서류 일치성 점검</span>
+        </a>
+
+        <button id="refreshBtn" class="btn-ghost" type="button" title="Supabase DB 최신 데이터 동기화">
+          <i class="bi bi-arrow-clockwise"></i> <span>새로고침</span>
         </button>
-        <button id="openDocViewerBtn" class="btn btn-primary doc-viewer-trigger-btn" type="button" title="원본 PDF 서류를 열고 바운딩 박스를 확인합니다">
-          <i class="bi bi-file-earmark-pdf-fill"></i> <span>원본 서류 뷰어</span>
-        </button>
+
         <button id="themeToggleBtn" class="theme-toggle-btn" type="button" aria-label="테마 전환">
           <span id="themeIcon"><i class="bi bi-sun-fill"></i></span> <span id="themeLabel">밝은 화면</span>
         </button>
       </div>
     </header>
 
-    <main class="layout">
-      <!-- Left Panel: Settings, Status, Lookup & Samples -->
-      <section class="panel left-panel">
-        <!-- 1️⃣ 실행 설정 -->
-        <div class="card">
-          <h2><i class="bi bi-sliders"></i> 실행 설정</h2>
+    <!-- Deduplication Control Banner -->
+    <div class="dedup-control-banner">
+      <div class="dedup-info">
+        <i class="bi bi-layers-half"></i>
+        <span id="dedupStatusText">동일 PDF 최신본 기준 집계 활성 (중복 서류 자동 필터링)</span>
+      </div>
+      <div id="dedupToggle" class="dedup-toggle-wrap" title="동일 PDF 파일의 이전 검증 이력 포함 여부를 전환합니다">
+        <span>최신본만 집계</span>
+        <div id="dedupSwitch" class="toggle-switch active">
+          <span class="toggle-slider"></span>
+        </div>
+      </div>
+    </div>
 
-          <!-- Collapsible API Settings (Folded by default) -->
-          <details class="api-settings-details">
-            <summary class="api-settings-summary">
-              <span><i class="bi bi-key-fill"></i> API 설정</span>
-              <span class="summary-hint">클릭하여 펼치기 / 접기</span>
-            </summary>
-            <div class="api-settings-body">
-              <div class="label">
-                <span>API Key</span>
-                <span class="label-hint">Upstage Studio API Key</span>
-              </div>
-              <input id="apiKey" class="input" type="password" placeholder="up_..." />
-
-              <div class="label" style="margin-top: 14px;">
-                <span>Cloudflare Worker 프록시 URL</span>
-              </div>
-              <input id="workerUrl" class="input" type="text" value="https://bong.gehunmin19.workers.dev"
-                placeholder="https://bong.gehunmin19.workers.dev" />
-
-              <div class="label" style="margin-top: 14px;">
-                <span>Config ID</span>
-                <span class="label-hint">공란 시 최신버전(11) 자동 적용</span>
-              </div>
-              <input id="configId" class="input" type="text" value="11" placeholder="11" />
-            </div>
-          </details>
-
-          <div class="label" style="margin-top: 14px;">
-            <span>문서 업로드 및 샘플 선택</span>
-          </div>
-          <div id="dropzone" class="dropzone">
-            <input id="fileInput" type="file" hidden />
-            <div class="dropzone-icon"><i class="bi bi-cloud-arrow-up-fill"></i></div>
-            <p class="dropzone-title">내 PC 파일 선택 또는 드래그</p>
-            <p class="dropzone-sub">PDF / 이미지 / Office / 비디오 (최대 500MB)</p>
-          </div>
-
-          <div class="label" style="margin-top: 12px;">
-            <span><i class="bi bi-folder-symlink-fill"></i> 또는 샘플 데이터셋 선택</span>
-          </div>
-          <select id="sampleSelect" class="select sample-select-combo">
-            <option value="">-- 샘플 데이터선택 (클릭) --</option>
-            <option value="1">1️⃣ 실제샘플1 : 코오롱인더스트리 (PDF 12p)</option>
-            <option value="2">2️⃣ 실제샘플2 : 현대로템 (PDF 10p)</option>
-            <option value="3">3️⃣ 가상Match샘플 (서류 정상 수용, PDF 6p)</option>
-            <option value="4">4️⃣ 가상MisMatch샘플 (양하항·수량 불일치, PDF 6p)</option>
-          </select>
-
-
-          <div id="fileInfo" class="file-info">선택된 파일 없음</div>
-
-          <!-- Single line button row -->
-          <div class="button-row-single">
-            <button id="runBtn" class="btn btn-primary btn-flex" type="button"><i class="bi bi-rocket-takeoff-fill"></i>
-              점검 실행</button>
-            <button id="clearBtn" class="btn btn-ghost btn-flex" type="button"><i class="bi bi-arrow-clockwise"></i>
-              초기화</button>
+    <!-- 1️⃣ Top KPI Summary Cards -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-card-header">
+          <span class="kpi-label">활성 점검 서류</span>
+          <div class="kpi-icon-box kpi-icon-blue">
+            <i class="bi bi-file-earmark-text-fill"></i>
           </div>
         </div>
-
-        <!-- 2️⃣ 📌 실행 상태 (분리된 전용 카드) -->
-        <div class="card execution-status-card">
-          <h2><i class="bi bi-activity"></i> 실행 상태</h2>
-          <div id="jobStatus" class="status-banner">대기 중</div>
-          <div id="jobMeta" class="meta-text"></div>
+        <div id="kpiTotalDocs" class="kpi-value">-</div>
+        <div class="kpi-subtext">
+          <i class="bi bi-check-circle-fill" style="color: #2563eb;"></i>
+          <span>최신본 기준 활성 관리 서류</span>
         </div>
+      </div>
 
-        <!-- 3️⃣ 🔍 기존 Job ID로 결과 불러오기 -->
-        <div class="card">
-          <h2><i class="bi bi-search"></i> 기존 Job ID로 결과 불러오기</h2>
-          <div class="label" style="margin-top: 6px;">
-            <span>Job ID (res_...)</span>
-          </div>
-          <div class="lookup-input-group">
-            <input id="lookupJobId" class="input" type="text" placeholder="res_xxxxxxxxxxxx" />
-            <button id="lookupBtn" class="btn btn-secondary" type="button" style="white-space: nowrap;">조회</button>
+      <div class="kpi-card">
+        <div class="kpi-card-header">
+          <span class="kpi-label">정상 일치율 (Match Rate)</span>
+          <div class="kpi-icon-box kpi-icon-green">
+            <i class="bi bi-pie-chart-fill"></i>
           </div>
         </div>
-      </section>
+        <div id="kpiMatchRate" class="kpi-value">-</div>
+        <div class="kpi-subtext">
+          <i class="bi bi-arrow-up-right" style="color: #16a34a;"></i>
+          <span>선적서류 요건 100% 충족 비율</span>
+        </div>
+      </div>
 
-      <!-- Right Panel: Results & Metrics -->
-      <section class="panel right-panel">
-        <!-- 1️⃣ Flexible Metric Cards Grid -->
-        <div class="summary-grid">
-          <div id="overallStatusCard" class="card metric-card metric-card-centered">
-            <div class="metric-label header-metric-label">종합 상태</div>
-            <div id="overallStatus" class="metric-value" style="display: none;">-</div>
-            <div id="overallStatusDesc" class="metric-desc">결과 없음</div>
-          </div>
-
-          <div id="alertLevelCard" class="card metric-card metric-card-centered">
-            <div class="metric-label header-metric-label">위험도 수준</div>
-            <div id="alertLevel" class="metric-value" style="display: none;">-</div>
-            <div id="alertLevelDesc" class="metric-desc">결과 없음</div>
-          </div>
-
-          <div id="recommendedActionCard" class="card metric-card metric-card-wide">
-            <div class="metric-label header-metric-label">권장 조치사항</div>
-            <div id="recommendedAction" class="metric-desc large">결과 없음</div>
+      <div class="kpi-card">
+        <div class="kpi-card-header">
+          <span class="kpi-label">불일치 검출 서류</span>
+          <div class="kpi-icon-box kpi-icon-red">
+            <i class="bi bi-exclamation-triangle-fill"></i>
           </div>
         </div>
-
-        <!-- 2️⃣ One-line Summary -->
-        <div class="card">
-          <h2><i class="bi bi-file-earmark-text-fill"></i> 요약 (Summary)</h2>
-          <p id="oneLineSummary" class="summary-text">결과 없음</p>
+        <div id="kpiMismatches" class="kpi-value">-</div>
+        <div class="kpi-subtext">
+          <i class="bi bi-shield-slash-fill" style="color: #dc2626;"></i>
+          <span>수정/확인이 필요한 서류 건수</span>
         </div>
+      </div>
 
-        <!-- 3️⃣ Document Keys & Date Flow Summary -->
-        <div class="card">
-          <h2><i class="bi bi-file-earmark-code-fill"></i> 주요 문서 번호 (Document Keys)</h2>
-          <div id="documentKeys" class="kv-grid empty">결과 없음</div>
-        </div>
-
-        <!-- Date Flow Timeline Card -->
-        <div class="card">
-          <div class="table-card-header">
-            <h2><i class="bi bi-calendar-range-fill"></i> 서류 날짜 순서 및 흐름 (Date Flow Timeline)</h2>
-            <div id="timelineHeaderBadge"></div>
-          </div>
-          <div id="dateTimeline" class="empty">결과 없음</div>
-        </div>
-
-        <!-- 4️⃣ ⭐️ Streamlined Integrated Comparison Table (가장 중요) -->
-        <div class="card">
-          <div class="table-card-header">
-            <h2><i class="bi bi-table"></i> 무역서류 일치성 상세 교차 비교표</h2>
-            <div class="view-toggle-group">
-              <button id="viewCardBtn" class="btn-toggle active" type="button"><i class="bi bi-grid-fill"></i>
-                카드형</button>
-              <button id="viewTableBtn" class="btn-toggle" type="button"><i class="bi bi-layout-three-columns"></i>
-                테이블형</button>
-            </div>
-          </div>
-
-          <p class="table-desc">LC, Invoice, B/L, Packing List, Insurance, COO 등 6개 주요 수입 서류 간의 세부 항목별 일치 여부 비교</p>
-
-          <!-- Mobile Friendly Cards Container -->
-          <div id="comparisonCardsContainer" class="mobile-cards-grid">
-            <div class="empty-cell">결과 없음</div>
-          </div>
-
-          <!-- Integrated Comparison Table Wrapper -->
-          <div id="comparisonTableWrap" class="table-wrap-container" style="display: none;">
-            <div id="comparisonTableBody">
-              <div class="empty-cell">결과 없음</div>
-            </div>
+      <div class="kpi-card">
+        <div class="kpi-card-header">
+          <span class="kpi-label">수입자 / 수출자</span>
+          <div class="kpi-icon-box kpi-icon-purple">
+            <i class="bi bi-buildings-fill"></i>
           </div>
         </div>
+        <div id="kpiActiveParties" class="kpi-value">-</div>
+        <div class="kpi-subtext">
+          <i class="bi bi-people-fill" style="color: #9333ea;"></i>
+          <span>관리 중인 글로벌 거래 기업수</span>
+        </div>
+      </div>
+    </section>
 
-        <!-- 5️⃣ Per-Document Detailed Checklist -->
-        <div class="card">
-          <h2><i class="bi bi-check2-square"></i> 서류별 개별 상세 체크리스트</h2>
-          <p class="table-desc">서류를 선택하여 해당 서류의 상세 검증 항목 및 규정 충족 상태를 확인하세요.</p>
-          <div id="checklistTabs" class="checklist-tabs tabs-header"></div>
-          <div id="checklistContent" class="checklist-container">
-            <div class="empty-cell">결과 없음</div>
-          </div>
+    <!-- 2️⃣ Importer & Exporter Statistics Section (사용자 핵심 요구사항) -->
+    <section class="party-analytics-grid">
+      <!-- Left: 수입자(개설의뢰인) 통계 -->
+      <div class="party-analytics-card">
+        <div class="party-card-title">
+          <h3>
+            <i class="bi bi-building-check" style="color: #2563eb;"></i>
+            <span>수입자(개설의뢰인)별 검증 현황</span>
+          </h3>
+          <span id="importerCountBadge" class="badge-count">0개사</span>
+        </div>
+        <div id="importerList" class="party-list-container">
+          <div class="table-empty-state"><p>로딩 중...</p></div>
+        </div>
+      </div>
+
+      <!-- Right: 수출자(수익자) 통계 -->
+      <div class="party-analytics-card">
+        <div class="party-card-title">
+          <h3>
+            <i class="bi bi-globe-americas" style="color: #059669;"></i>
+            <span>수출자(수익자)별 공급 서류 현황</span>
+          </h3>
+          <span id="exporterCountBadge" class="badge-count">0개사</span>
+        </div>
+        <div id="exporterList" class="party-list-container">
+          <div class="table-empty-state"><p>로딩 중...</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3️⃣ Document Management Table Section -->
+    <section class="table-card">
+      <div class="table-card-header">
+        <div class="table-card-title">
+          <h2>
+            <i class="bi bi-table"></i>
+            <span>신용장 서류 점검 관리 이력</span>
+            <span id="tableCountBadge" class="badge-count" style="margin-left: 8px;">0건</span>
+          </h2>
+          <p>Supabase DB에 저장된 모든 서류의 원문 PDF 열람 및 상세 점검 결과를 관리합니다.</p>
+        </div>
+      </div>
+
+      <!-- Filters & Search Toolbar -->
+      <div class="filter-toolbar">
+        <div class="search-input-box">
+          <i class="bi bi-search"></i>
+          <input id="searchInput" type="text" placeholder="파일명, L/C번호, 수입자, 수출자 검색..." />
         </div>
 
-        <!-- Raw JSON Result (Collapsible for Debugging) -->
-        <details class="card raw-json-card">
-          <summary class="raw-json-summary">
-            <span><i class="bi bi-code-slash"></i> 개발자용 Raw JSON 결과 보기</span>
-          </summary>
+        <select id="statusFilter" class="filter-select">
+          <option value="ALL">전체 판정 상태</option>
+          <option value="MATCH">🟢 정상 일치 (MATCH)</option>
+          <option value="MISMATCH">🔴 불일치 (MISMATCH)</option>
+        </select>
 
-          <div class="json-action-bar">
-            <button id="copyJsonBtn" class="btn btn-secondary btn-sm" type="button"><i
-                class="bi bi-clipboard-check"></i> JSON 전체 복사</button>
-            <button id="downloadJsonBtn" class="btn btn-secondary btn-sm" type="button"><i class="bi bi-download"></i>
-              샘플 JSON 파일 다운로드</button>
-          </div>
+        <select id="applicantFilter" class="filter-select">
+          <option value="ALL">전체 수입자(개설의뢰인)</option>
+        </select>
 
-          <pre id="rawJson" class="raw-json">결과 없음</pre>
-        </details>
-      </section>
-    </main>
+        <select id="beneficiaryFilter" class="filter-select">
+          <option value="ALL">전체 수출자(수익자)</option>
+        </select>
+      </div>
+
+      <!-- Data Table -->
+      <div class="data-table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 48px;">No</th>
+              <th>서류명 (PDF)</th>
+              <th>신용장(L/C) 번호</th>
+              <th>수입자 (개설의뢰인)</th>
+              <th>수출자 (수익자)</th>
+              <th>판정 결과</th>
+              <th>최종 점검 일시</th>
+              <th style="width: 190px;">관리 작업</th>
+            </tr>
+          </thead>
+          <tbody id="docTableBody">
+            <tr>
+              <td colspan="8" class="table-empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Supabase DB에서 서류 이력을 불러오는 중입니다...</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
-  <!-- 🌟 문서 뷰어 배경 딤 (모바일 터치 닫기 지원) 🌟 -->
-  <div id="docViewerBackdrop" class="doc-viewer-backdrop" style="display: none;"></div>
-
-  <!-- 🌟 문서 뷰어 모달리스 플로팅 윈도우 (Modeless Draggable & Resizable Window) 🌟 -->
-  <div id="docViewerFloating" class="doc-viewer-floating" style="display: none;">
-    <!-- 모바일 드래그/스와이프 다운 힌트 바 -->
-    <div class="mobile-swipe-handle-bar" id="mobileSwipeHandleBar">
-      <div class="swipe-pill"></div>
-    </div>
-
-    <!-- 팝업 상단 툴바 헤더 (드래그 핸들 역할) -->
-    <div class="doc-viewer-header" id="docViewerHeader">
-      <div class="doc-viewer-header-top">
-        <div class="doc-viewer-title-group">
-          <span class="drag-grip-icon" title="헤더를 드래그하여 창 이동"><i class="bi bi-grip-vertical"></i></span>
-          <span class="doc-badge" id="viewerDocBadge"><i class="bi bi-file-earmark-pdf-fill"></i> 코오롱인더스트리</span>
-          <h3 id="viewerDocTitle">상업송장 (COMMERCIAL INVOICE)</h3>
-          <span class="page-indicator" id="viewerPageIndicator">Page 3 / 12</span>
+  <!-- PDF Preview Modal -->
+  <div id="pdfModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <i class="bi bi-file-earmark-pdf-fill" style="color: #ef4444; font-size: 18px;"></i>
+          <h3 id="pdfModalTitle">원문 서류 미리보기</h3>
         </div>
-
-        <!-- 상단 닫기 및 윈도우 컨트롤 (모바일에서도 항상 우상단 고정 노출) -->
-        <div class="window-control-group header-actions">
-          <button id="viewerDockBtn" class="tool-btn btn-win-ctl" type="button" title="우측 분할 도킹 위치로 리셋"><i class="bi bi-layout-split"></i></button>
-          <button id="viewerMaxBtn" class="tool-btn btn-win-ctl" type="button" title="최대화 / 이전 크기 토글"><i class="bi bi-arrows-fullscreen"></i></button>
-          <button id="viewerCloseBtn" class="tool-btn btn-close-modal" type="button" title="닫기 (ESC)"><i class="bi bi-x-lg"></i></button>
+        <div class="modal-actions">
+          <a id="pdfModalNewTab" href="#" target="_blank" class="btn-ghost" style="padding: 6px 12px; font-size: 12px;">
+            <i class="bi bi-box-arrow-up-right"></i> <span>새 탭에서 열기</span>
+          </a>
+          <button id="pdfModalClose" class="modal-close-btn" type="button" aria-label="닫기">
+            <i class="bi bi-x-lg"></i>
+          </button>
         </div>
       </div>
-      
-      <div class="doc-viewer-toolbar">
-        <!-- 페이지 이동 -->
-        <div class="toolbar-btn-group">
-          <button id="viewerPrevPageBtn" class="tool-btn" type="button" title="이전 페이지 (PageUp)"><i class="bi bi-chevron-left"></i></button>
-          <span class="page-jump-box">
-            <input type="number" id="viewerPageInput" min="1" max="12" value="3" /> / <span id="viewerTotalPages">12</span>
-          </span>
-          <button id="viewerNextPageBtn" class="tool-btn" type="button" title="다음 페이지 (PageDown)"><i class="bi bi-chevron-right"></i></button>
-        </div>
-
-        <!-- 확대/축소 -->
-        <div class="toolbar-btn-group">
-          <button id="viewerZoomOutBtn" class="tool-btn" type="button" title="축소 (-)"><i class="bi bi-zoom-out"></i></button>
-          <span id="viewerZoomLabel" class="zoom-level">100%</span>
-          <button id="viewerZoomInBtn" class="tool-btn" type="button" title="확대 (+)"><i class="bi bi-zoom-in"></i></button>
-          <button id="viewerFitWidthBtn" class="tool-btn" type="button" title="너비 맞춤"><i class="bi bi-arrows-expand"></i></button>
-        </div>
-
-        <!-- 하이라이트 토글 -->
-        <button id="viewerToggleHighlightBtn" class="tool-btn btn-highlight-active" type="button" title="바운딩 박스 표시 On/Off">
-          <i class="bi bi-bounding-box"></i> <span>하이라이트 ON</span>
-        </button>
-      </div>
+      <iframe id="pdfModalIframe" class="modal-iframe" src=""></iframe>
     </div>
-
-    <!-- 서류별 빠른 이동 탭 네비게이션 -->
-    <div class="doc-quick-nav" id="docQuickNav">
-      <!-- JS로 동적 생성 -->
-    </div>
-
-    <!-- 타겟 필드 하이라이트 배너 -->
-    <div id="viewerHighlightBanner" class="viewer-highlight-banner" style="display: none;">
-      <i class="bi bi-geo-alt-fill"></i>
-      <span id="viewerHighlightTargetText">선택 항목: L/C 번호 (M0201602EU02535)</span>
-    </div>
-
-    <!-- 팝업 본문: PDF 캔버스 & 하이라이트 레이어 -->
-    <div class="doc-viewer-body" id="docViewerBody">
-      <div class="doc-page-stage" id="docPageStage">
-        <canvas id="pdfCanvas" class="pdf-canvas"></canvas>
-        <div id="highlightLayer" class="highlight-overlay-layer"></div>
-      </div>
-      <div id="viewerLoadingSpinner" class="viewer-spinner" style="display: none;">
-        <div class="spinner-icon"><i class="bi bi-arrow-repeat"></i></div>
-        <span>문서 페이지 렌더링 중...</span>
-      </div>
-    </div>
-
-    <!-- 모바일 전용 하단 고정 닫기 바 -->
-    <div id="viewerMobileBottomBar" class="viewer-mobile-bottom-bar">
-      <button id="viewerMobileCloseBtn" class="btn-mobile-close-action" type="button">
-        <i class="bi bi-x-circle-fill"></i>
-        <span>문서 뷰어 닫기</span>
-      </button>
-    </div>
-
-    <!-- 리사이즈 핸들 (우하단, 데스크톱용) -->
-    <div class="doc-viewer-resizer" id="docViewerResizer" title="드래그하여 크기 조절"></div>
   </div>
 
-  <script src="./app.js?v=20260930_v3"></script>
+  <script src="./dashboard.js?v=20261004_v1"></script>
 </body>
+
 </html>

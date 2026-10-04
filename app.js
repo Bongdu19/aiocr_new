@@ -327,56 +327,137 @@ function getFieldLabelKo(schemaName, fieldName) {
   return fn;
 }
 
-function getEvidenceFieldLabelKo(docType, fieldName) {
-  if (!fieldName) return "";
-  var normDoc = typeof normalizeDocType === "function" ? normalizeDocType(docType) : docType;
-  var schemaName = DOC_TYPE_TO_SCHEMA[normDoc] || DOC_TYPE_TO_SCHEMA[docType] || (docType ? (docType + "_schema") : "");
-  return getFieldLabelKo(schemaName, fieldName);
-}
+/* ==========================================================================
+   통합 한글 라벨 변환 엔진 (비교표, 점검항목, 스키마 필드, PDF 뷰어 팝업 100% 한글화)
+   ========================================================================== */
+var CHECK_ITEM_KO_DICTIONARY = {
+  "file_presence": "서류 구비 현황",
+  "required_documents_presence": "L/C 요구서류 충족 여부",
+  "lc_number_consistency": "신용장(L/C) 번호 일치성",
+  "invoice_number_consistency": "송장 번호 일치성",
+  "bl_number_reference_consistency": "B/L 번호 참조 일치성",
+  "seller_party_consistency": "수출자/송하인 정보 일치성",
+  "buyer_party_consistency": "수입자/수하인 정보 일치성",
+  "goods_description": "물품 명세 일치성",
+  "package_count_consistency": "포장 수량 일치성",
+  "gross_weight_consistency": "총중량 일치성",
+  "measurement_cbm_consistency": "용적(CBM) 일치성",
+  "port_of_loading": "선적항 일치성",
+  "port_of_discharge": "양하항 일치성",
+  "bl_shipment_date_vs_latest_shipment": "선적일 vs 최종선적기한",
+  "insurance_policy_issue_date_vs_shipment_date": "보험증권 발행일 vs 선적일",
+  "date_flow_timeline": "문서 간 날짜 흐름",
+  "invoice_amount_vs_lc_amount": "송장금액 vs L/C 금액",
+  "insurance_amount_vs_lc_requirement": "보험금액 vs L/C 요구조건",
+  "vessel_voyage_consistency": "선박/항차 일치성",
+  "country_of_origin_consistency": "원산지 정보 일치성",
+  "hs_code": "HS 코드 일치성",
+  "hs_code_consistency": "HS 코드 일치성",
+  "related_lc_number": "관련 L/C 번호",
+  "document_title": "문서명",
+  "document_type": "문서 종류",
+  "document_date": "문서 일자",
+  "issuer_or_sender_name": "발행/발송처",
+  "receiver_or_beneficiary_name": "수신/수익자",
+  "claim_payable_text": "보험금 지급지",
+  "payment_terms": "결제 조건",
+  "freight_terms": "운임 조건",
+  "latest_shipment_date": "최종 선적기한",
+  "shipment_date": "선적일",
+  "on_board_date": "본선적재일",
+  "expiry_date": "유효기일",
+  "issue_date": "발행일",
+  "total_amount": "총 금액",
+  "credit_amount": "신용장 금액",
+  "insured_amount": "보험 가입금액",
+  "currency_code": "통화 코드",
+  "currency": "통화",
+  "total_package_count": "총 포장수량",
+  "package_count": "포장수량",
+  "total_gross_weight": "총중량(Gross)",
+  "gross_weight": "총중량",
+  "total_net_weight": "순중량(Net)",
+  "net_weight": "순중량",
+  "total_measurement_cbm": "총 용적(CBM)",
+  "measurement_cbm": "용적(CBM)",
+  "coverage_clauses_text": "담보 약관",
+  "marks_numbers": "화인/화목(Marks)",
+  "vessel_name": "선박명(본선명)",
+  "voyage_number": "항차(Voyage)"
+};
 
-function getKoreanFieldLabel(raw, docType) {
-  if (!raw) return "";
-  var s = String(raw).trim();
+function toKoreanLabel(rawKey, docType) {
+  if (!rawKey) return "";
+  var s = String(rawKey).trim();
 
-  // 콜론(:)으로 키와 값이 연결된 경우 (예: "line_items.product_name: LED DISPLAY...")
+  // 이미 한글이 포함된 경우 (예: "신용장(L/C) 번호 일치성: M0201410ES04828" 등)
+  if (/[가-힣]/.test(s)) {
+    // 만약 "lc_number_consistency: 가나다" 처럼 영문 키 뒤에 값이 붙은 경우 앞부분만 번역
+    if (s.indexOf(":") >= 0) {
+      var segs = s.split(":");
+      var firstK = segs[0].trim();
+      var restV = segs.slice(1).join(":");
+      if (!/[가-힣]/.test(firstK)) {
+        var koFirst = toKoreanLabel(firstK, docType);
+        return koFirst + ":" + restV;
+      }
+    }
+    return s;
+  }
+
+  // 콜론(:) 분리 처리 (예: "lc_number_consistency: M0201410ES04828")
   if (s.indexOf(":") >= 0) {
     var parts = s.split(":");
     var kPart = parts[0].trim();
     var vPart = parts.slice(1).join(":").trim();
-    var koK = getKoreanFieldLabel(kPart, docType);
-    return koK + ": " + vPart;
+    var koK = toKoreanLabel(kPart, docType);
+    return koK + (vPart ? (": " + vPart) : "");
   }
 
-  if (/[가-힣]/.test(s)) {
-    return s;
-  }
+  var lower = s.toLowerCase().replace(/[\s\-]+/g, "_");
+  if (CHECK_ITEM_KO_DICTIONARY[lower]) return CHECK_ITEM_KO_DICTIONARY[lower];
+  if (CHECK_ITEM_KO_DICTIONARY[s]) return CHECK_ITEM_KO_DICTIONARY[s];
 
-  if (docType) {
-    var fromEvidence = getEvidenceFieldLabelKo(docType, s);
-    if (fromEvidence && fromEvidence !== s) return fromEvidence;
-  }
+  if (FIELD_LABELS_KO && FIELD_LABELS_KO[s]) return FIELD_LABELS_KO[s];
+  if (FIELD_LABELS_KO && FIELD_LABELS_KO[lower]) return FIELD_LABELS_KO[lower];
+  if (FIELD_KO_MAP && FIELD_KO_MAP[s]) return FIELD_KO_MAP[s];
+  if (FIELD_KO_MAP && FIELD_KO_MAP[lower]) return FIELD_KO_MAP[lower];
 
   // schema.field 형태인 경우
-  if (s.indexOf("_schema.") >= 0) {
-    if (FIELD_LABELS_KO[s]) return FIELD_LABELS_KO[s];
-    var parts2 = s.split(".");
-    var fnOnly = parts2.slice(1).join(".");
-    if (FIELD_KO_MAP[fnOnly]) return FIELD_KO_MAP[fnOnly];
+  if (s.indexOf(".") >= 0) {
+    var pArr = s.split(".");
+    var fnOnly = pArr[pArr.length - 1];
+    var fnOnlyLower = fnOnly.toLowerCase();
+    if (CHECK_ITEM_KO_DICTIONARY[fnOnlyLower]) return CHECK_ITEM_KO_DICTIONARY[fnOnlyLower];
+    if (FIELD_KO_MAP && FIELD_KO_MAP[fnOnlyLower]) return FIELD_KO_MAP[fnOnlyLower];
+    if (FIELD_LABELS_KO && FIELD_LABELS_KO[fnOnly]) return FIELD_LABELS_KO[fnOnly];
   }
 
-  var key = s.toLowerCase();
-  if (FIELD_KO_MAP[key]) return FIELD_KO_MAP[key];
-  if (FIELD_LABELS_KO[key]) return FIELD_LABELS_KO[key];
-
-  var mapKeys = Object.keys(FIELD_KO_MAP);
-  for (var i = 0; i < mapKeys.length; i++) {
-    var mk = mapKeys[i];
-    if (key === mk || key.endsWith("." + mk) || key.startsWith(mk + ".")) {
-      return FIELD_KO_MAP[mk];
+  // docType 스키마 결합 검색
+  if (docType) {
+    var normDoc = typeof normalizeDocType === "function" ? normalizeDocType(docType) : docType;
+    var schema = DOC_TYPE_TO_SCHEMA && (DOC_TYPE_TO_SCHEMA[normDoc] || DOC_TYPE_TO_SCHEMA[docType]);
+    if (schema && FIELD_LABELS_KO) {
+      if (FIELD_LABELS_KO[schema + "." + s]) return FIELD_LABELS_KO[schema + "." + s];
+      if (FIELD_LABELS_KO[schema + "." + lower]) return FIELD_LABELS_KO[schema + "." + lower];
     }
   }
 
   return s;
+}
+
+function getEvidenceFieldLabelKo(docType, fieldName) {
+  if (!fieldName) return "";
+  var normDoc = typeof normalizeDocType === "function" ? normalizeDocType(docType) : docType;
+  var schemaName = DOC_TYPE_TO_SCHEMA[normDoc] || DOC_TYPE_TO_SCHEMA[docType] || (docType ? (docType + "_schema") : "");
+  var res = getFieldLabelKo(schemaName, fieldName);
+  if (res && res !== fieldName) return res;
+  return toKoreanLabel(fieldName, docType);
+}
+
+function getKoreanFieldLabel(raw, docType) {
+  if (!raw) return "";
+  return toKoreanLabel(raw, docType);
 }
 
 /**
@@ -513,8 +594,10 @@ function getEvidenceTarget(sampleIdx, docType, evidenceDoc, checkItemKey) {
   var normSrc = normalizeSource(evidenceDoc.source);
   if (normSrc && normSrc.page > 0 && normSrc.boxes.length > 0) {
     var rawField = evidenceDoc.field_name || checkItemKey || "";
-    var koField = getEvidenceFieldLabelKo(docType, rawField) || getKoreanFieldLabel(rawField, docType);
-    var valSnippet = evidenceDoc.value != null ? (": " + String(evidenceDoc.value).slice(0, 35)) : "";
+    var koField = toKoreanLabel(rawField, docType);
+    var valSnippet = (evidenceDoc.value != null && String(evidenceDoc.value).trim() !== "")
+      ? (": " + String(evidenceDoc.value).slice(0, 35))
+      : "";
     return {
       page: normSrc.page,
       box: normSrc.boxes[0],
@@ -2220,7 +2303,8 @@ function selectChecklistTab(docKey) {
       var targetPage = (itemObj.source && itemObj.source.page > 0) ? itemObj.source.page : (itemObj.page || 1);
       var targetBox = (itemObj.source && itemObj.source.boxes && itemObj.source.boxes[0]) ? itemObj.source.boxes[0] : (itemObj.box || null);
       var rawTitle = itemObj.item || itemObj.title || "점검 항목";
-      var targetLabel = rawTitle + (itemObj.details ? ": " + String(itemObj.details).slice(0, 30) : "");
+      var koTitle = toKoreanLabel(rawTitle, docKey);
+      var targetLabel = koTitle + (itemObj.details ? ": " + String(itemObj.details).slice(0, 30) : "");
 
       openDocViewer(currentActiveSampleIndex || 1, targetPage, targetBox, targetLabel);
     });
@@ -3979,7 +4063,7 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
 
   var pageToOpen = targetPage || 1;
   docViewerState.targetBox = targetBox || null;
-  docViewerState.targetLabel = targetLabel || "";
+  docViewerState.targetLabel = toKoreanLabel(targetLabel || "");
 
   // Set PDF.js Worker
   if (window.pdfjsLib) {
@@ -4179,10 +4263,17 @@ function renderHighlightLayer(pageNum) {
             var coordKey = Math.round(box.x * 1000) + "_" + Math.round(box.y * 1000);
             if (!seenCoords[coordKey]) {
               seenCoords[coordKey] = true;
+              var rawTitle = cr.check_item_ko || cr.label || cr.check_item || docItem.field_name || "";
+              var koTitle = toKoreanLabel(rawTitle, docKey);
+              var valSnippet = (docItem.value != null && String(docItem.value).trim() !== "")
+                ? (": " + String(docItem.value).slice(0, 35))
+                : "";
+              var finalBoxLabel = koTitle + valSnippet;
               pageBoxes.push({
-                label: (cr.label || cr.check_item || "") + (docItem.value ? ": " + docItem.value : ""),
+                label: finalBoxLabel,
                 box: box,
-                key: cr.check_item
+                key: cr.check_item,
+                docKey: docKey
               });
             }
           });
@@ -4228,9 +4319,6 @@ function renderHighlightLayer(pageNum) {
     var isLargeBox = area > 0.035; // 전체 페이지 면적의 3.5% 이상을 차지하는 대형 박스 (테이블 블록 등)
 
     var boxDiv = document.createElement("div");
-    // 🌟 사용자 코멘트 1 반영 (큰 박스 내 작은 박스 클릭 지원):
-    // 1) 큰 박스가 활성화된 경우 large-target-active 클래스 부여 -> 내부 작은 박스로 클릭 이벤트 통과
-    // 2) 작은 박스일수록 높은 z-index를 부여하여 전면에 노출 및 우선 선택 보장
     boxDiv.className = "highlight-box" +
       (isTarget ? " target-active" : "") +
       (isTarget && isLargeBox ? " large-target-active" : "");
@@ -4243,12 +4331,13 @@ function renderHighlightLayer(pageNum) {
     var baseZ = Math.max(10, Math.round(250 - Math.min(area, 1) * 200));
     boxDiv.style.zIndex = isTarget ? (isLargeBox ? baseZ : 255) : baseZ;
 
-    boxDiv.setAttribute("title", pb.label);
+    var koBoxLabel = toKoreanLabel(pb.label);
+    boxDiv.setAttribute("title", koBoxLabel);
 
     if (isTarget) {
       var l = document.createElement("span");
       l.className = "highlight-box-label";
-      l.textContent = docViewerState.targetLabel || pb.label;
+      l.textContent = toKoreanLabel(docViewerState.targetLabel || pb.label);
       boxDiv.appendChild(l);
       targetEl = boxDiv;
     } else {
@@ -4257,7 +4346,7 @@ function renderHighlightLayer(pageNum) {
         if (!boxDiv.classList.contains("target-active") && !boxDiv.querySelector(".highlight-box-label")) {
           var tag = document.createElement("span");
           tag.className = "highlight-box-label highlight-box-label-yellow";
-          tag.textContent = pb.label;
+          tag.textContent = toKoreanLabel(pb.label);
           boxDiv.appendChild(tag);
         }
       });
@@ -4273,10 +4362,11 @@ function renderHighlightLayer(pageNum) {
     boxDiv.addEventListener("click", function (e) {
       e.stopPropagation();
       docViewerState.targetBox = b;
-      docViewerState.targetLabel = pb.label;
+      var koClickLabel = toKoreanLabel(pb.label);
+      docViewerState.targetLabel = koClickLabel;
       renderHighlightLayer(pageNum);
       if (els.viewerHighlightBanner) els.viewerHighlightBanner.style.display = "flex";
-      if (els.viewerHighlightTargetText) els.viewerHighlightTargetText.textContent = "하이라이트: " + pb.label;
+      if (els.viewerHighlightTargetText) els.viewerHighlightTargetText.textContent = "하이라이트: " + koClickLabel;
     });
 
     els.highlightLayer.appendChild(boxDiv);
@@ -4298,7 +4388,7 @@ function renderHighlightLayer(pageNum) {
     if (docViewerState.targetLabel) {
       var customTag = document.createElement("span");
       customTag.className = "highlight-box-label";
-      customTag.textContent = docViewerState.targetLabel;
+      customTag.textContent = toKoreanLabel(docViewerState.targetLabel);
       customDiv.appendChild(customTag);
     }
 
@@ -4358,7 +4448,7 @@ function openDocViewerWithField(fieldKey) {
             target = {
               page: dItem.source.page,
               box: dItem.source.boxes[0],
-              label: (cr.label || fieldKey) + ": " + (dItem.value || "")
+              label: toKoreanLabel(cr.check_item_ko || cr.label || fieldKey, docs[j]) + (dItem.value ? ": " + dItem.value : "")
             };
             break;
           }
@@ -4372,7 +4462,7 @@ function openDocViewerWithField(fieldKey) {
     openDocViewer(sIdx, target.page, target.box, target.label);
   } else {
     var def = getDocTarget(sIdx, null);
-    openDocViewer(sIdx, def.page, null, fieldKey);
+    openDocViewer(sIdx, def.page, null, toKoreanLabel(fieldKey));
   }
 }
 
@@ -4383,16 +4473,17 @@ function openDocViewerWithCheckItem(checkItemKey, docType) {
 
   // 1. JSON source BBox를 통한 하이라이트 (100% JSON 파일 기반)
   if (target && target.page > 0) {
-    openDocViewer(sIdx, target.page, target.box, target.label);
+    openDocViewer(sIdx, target.page, target.box, toKoreanLabel(target.label, docType));
     return;
   }
 
   // 2. JSON에 BBox가 없는 경우 명확히 안내
   var hasVal = evidenceDoc && hasMeaningfulValue(evidenceDoc.value);
+  var koItemName = toKoreanLabel(evidenceDoc && evidenceDoc.field_name ? evidenceDoc.field_name : checkItemKey, docType);
   if (hasVal) {
-    alert("해당 항목(" + (evidenceDoc.field_name || checkItemKey) + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + evidenceDoc.value + ")");
+    alert("해당 항목(" + koItemName + ")은 서류 내 원문 위치 정보(BBox)가 제공되지 않았습니다.\n(값: " + evidenceDoc.value + ")");
   } else {
-    alert("해당 서류에는 '" + checkItemKey + "' 관련 기재 내용이 없습니다.");
+    alert("해당 서류에는 '" + koItemName + "' 관련 기재 내용이 없습니다.");
   }
 }
 

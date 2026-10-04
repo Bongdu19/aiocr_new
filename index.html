@@ -134,6 +134,20 @@
           <span id="kpiOcrSubtext">문서 원문 AI 판독 정확성 지수</span>
         </div>
       </div>
+
+      <div class="kpi-card">
+        <div class="kpi-card-header">
+          <span class="kpi-label">API 평균 수행시간</span>
+          <div class="kpi-icon-box kpi-icon-cyan">
+            <i class="bi bi-stopwatch-fill"></i>
+          </div>
+        </div>
+        <div id="kpiAvgDuration" class="kpi-value">-</div>
+        <div class="kpi-subtext">
+          <i class="bi bi-lightning-charge-fill" style="color: #0284c7;"></i>
+          <span id="kpiDurationSubtext">문서당 평균 AI 심사 소요시간</span>
+        </div>
+      </div>
     </section>
 
     <!-- 2️⃣ Importer & Exporter Statistics Section (사용자 핵심 요구사항) -->
@@ -214,13 +228,15 @@
               <th>수출자 (수익자)</th>
               <th>판정 결과</th>
               <th>AI 판독 신뢰도</th>
+              <th>API 수행시간</th>
+              <th>Job 번호</th>
               <th>최종 점검 일시</th>
               <th style="width: 190px;">관리 작업</th>
             </tr>
           </thead>
           <tbody id="docTableBody">
             <tr>
-              <td colspan="9" class="table-empty-state">
+              <td colspan="11" class="table-empty-state">
                 <i class="bi bi-hourglass-split"></i>
                 <p>Supabase DB에서 서류 이력을 불러오는 중입니다...</p>
               </td>

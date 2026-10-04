@@ -14,12 +14,184 @@ var currentCustomPdfUrl = null;
 var currentExtractDocMap = {};
 
 /* ==========================================================================
-   Evidence Field Korean Translation Map (사용자 요구사항 2)
+   Evidence Field Korean Translation Map (Upstage Studio Agent v14 규격 준수)
    ========================================================================== */
+var DOC_TYPE_TO_SCHEMA = {
+  lc: "lc_schema",
+  commercial_invoice: "commercial_invoice_schema",
+  bill_of_lading: "bill_of_lading_schema",
+  packing_list: "packing_list_schema",
+  certificate_of_origin: "certificate_of_origin_schema",
+  marine_cargo_insurance: "marine_cargo_insurance_schema",
+  other_document: "other_document_schema"
+};
+
+var FIELD_LABELS_KO = {
+  // lc_schema
+  "lc_schema.document_type": "문서 종류",
+  "lc_schema.lc_number": "L/C 번호",
+  "lc_schema.reference_number": "참조번호",
+  "lc_schema.po_number": "구매주문번호",
+  "lc_schema.applicant_name": "신청인명",
+  "lc_schema.beneficiary_name": "수익자명",
+  "lc_schema.credit_amount": "신용장 금액",
+  "lc_schema.currency_code": "통화 코드",
+  "lc_schema.expiry_date": "만료일",
+  "lc_schema.latest_shipment_date": "최종 선적기한",
+  "lc_schema.tolerance_text": "허용오차 문구",
+  "lc_schema.tolerance_percent_plus": "상향 허용오차(%)",
+  "lc_schema.tolerance_percent_minus": "하향 허용오차(%)",
+  "lc_schema.partial_shipment_allowed": "분할선적 허용 여부",
+  "lc_schema.transshipment_allowed": "환적 허용 여부",
+  "lc_schema.payment_terms": "지급조건",
+  "lc_schema.goods_summary": "상품 요약",
+  "lc_schema.required_documents.document_name": "요구서류명",
+  "lc_schema.required_documents.document_requirement_text": "요구서류 조건",
+  // v14 추가 항목 (lc_schema)
+  "lc_schema.issue_date": "발행일자",
+  "lc_schema.port_of_loading": "선적항",
+  "lc_schema.port_of_discharge": "양하항",
+
+  // commercial_invoice_schema
+  "commercial_invoice_schema.document_type": "문서 종류",
+  "commercial_invoice_schema.invoice_number": "송장 번호",
+  "commercial_invoice_schema.reference_number": "참조번호",
+  "commercial_invoice_schema.po_number": "구매주문번호",
+  "commercial_invoice_schema.lc_number": "L/C 번호",
+  "commercial_invoice_schema.seller_name": "판매자명",
+  "commercial_invoice_schema.buyer_name": "구매자명",
+  "commercial_invoice_schema.invoice_date": "송장일자",
+  "commercial_invoice_schema.currency_code": "통화 코드",
+  "commercial_invoice_schema.total_amount": "총금액",
+  "commercial_invoice_schema.port_of_loading": "선적항",
+  "commercial_invoice_schema.port_of_discharge": "양하항",
+  "commercial_invoice_schema.payment_terms": "지급조건",
+  "commercial_invoice_schema.line_items.product_name": "품목명",
+  "commercial_invoice_schema.line_items.quantity": "수량",
+  "commercial_invoice_schema.line_items.unit_price": "단가",
+  "commercial_invoice_schema.line_items.line_amount": "행 금액",
+  "commercial_invoice_schema.line_items.hs_code": "HS 코드",
+  // v14 추가 항목 (commercial_invoice_schema)
+  "commercial_invoice_schema.hs_code": "HS 코드",
+
+  // bill_of_lading_schema
+  "bill_of_lading_schema.document_type": "문서 종류",
+  "bill_of_lading_schema.bl_number": "B/L 번호",
+  "bill_of_lading_schema.reference_number": "참조번호",
+  "bill_of_lading_schema.po_number": "구매주문번호",
+  "bill_of_lading_schema.lc_number": "L/C 번호",
+  "bill_of_lading_schema.shipper_name": "송하인명",
+  "bill_of_lading_schema.consignee_name": "수하인명",
+  "bill_of_lading_schema.vessel_name": "선박명",
+  "bill_of_lading_schema.port_of_loading": "선적항",
+  "bill_of_lading_schema.port_of_discharge": "양하항",
+  "bill_of_lading_schema.shipment_date": "선적일",
+  "bill_of_lading_schema.on_board_date": "본선적재일",
+  "bill_of_lading_schema.total_measurement_cbm": "총 CBM",
+  "bill_of_lading_schema.freight_terms": "운임조건",
+  "bill_of_lading_schema.cargo_details.cargo_description": "화물 설명",
+  "bill_of_lading_schema.cargo_details.package_count": "포장 수량",
+  "bill_of_lading_schema.cargo_details.gross_weight": "총중량",
+  "bill_of_lading_schema.cargo_details.measurement_cbm": "CBM",
+
+  // packing_list_schema
+  "packing_list_schema.document_type": "문서 종류",
+  "packing_list_schema.packing_list_number": "패킹리스트 번호",
+  "packing_list_schema.reference_number": "참조번호",
+  "packing_list_schema.po_number": "구매주문번호",
+  "packing_list_schema.lc_number": "L/C 번호",
+  "packing_list_schema.seller_name": "판매자명",
+  "packing_list_schema.buyer_name": "구매자명",
+  "packing_list_schema.packing_list_date": "패킹리스트 일자",
+  "packing_list_schema.total_package_count": "총 포장 수량",
+  "packing_list_schema.total_net_weight": "총 순중량",
+  "packing_list_schema.total_gross_weight": "총중량",
+  "packing_list_schema.total_measurement_cbm": "총 CBM",
+  "packing_list_schema.port_of_loading": "선적항",
+  "packing_list_schema.port_of_discharge": "양하항",
+  "packing_list_schema.payment_terms": "지급조건",
+  "packing_list_schema.line_items.product_name": "품목명",
+  "packing_list_schema.line_items.quantity": "수량",
+  "packing_list_schema.line_items.package_count": "포장 수량",
+  "packing_list_schema.line_items.net_weight": "순중량",
+  "packing_list_schema.line_items.gross_weight": "총중량",
+  "packing_list_schema.line_items.measurement_cbm": "CBM",
+  "packing_list_schema.line_items.hs_code": "HS 코드",
+  // v14 추가 항목 (packing_list_schema)
+  "packing_list_schema.hs_code": "HS 코드",
+
+  // certificate_of_origin_schema (기본 및 v14 20건 추가)
+  "certificate_of_origin_schema.document_type": "문서 종류",
+  "certificate_of_origin_schema.certificate_number": "원산지증명서 번호",
+  "certificate_of_origin_schema.reference_number": "참조번호",
+  "certificate_of_origin_schema.po_number": "구매주문번호",
+  "certificate_of_origin_schema.lc_number": "L/C 번호",
+  "certificate_of_origin_schema.exporter_name": "수출자명",
+  "certificate_of_origin_schema.importer_name": "수입자명",
+  "certificate_of_origin_schema.country_of_origin": "원산지 국가",
+  "certificate_of_origin_schema.invoice_number": "송장 번호",
+  "certificate_of_origin_schema.invoice_date": "송장일자",
+  "certificate_of_origin_schema.goods_summary": "상품 요약",
+  // v14 추가 항목 (certificate_of_origin_schema)
+  "certificate_of_origin_schema.hs_code": "HS 코드",
+  "certificate_of_origin_schema.incoterms": "인코텀즈",
+  "certificate_of_origin_schema.issue_date": "발행일자",
+  "certificate_of_origin_schema.vessel_name": "선박명",
+  "certificate_of_origin_schema.marks_numbers": "화인/마크",
+  "certificate_of_origin_schema.stamp_present": "직인 날인 여부",
+  "certificate_of_origin_schema.voyage_number": "항차 번호",
+  "certificate_of_origin_schema.consignee_name": "수하인명",
+  "certificate_of_origin_schema.signature_date": "서명일자",
+  "certificate_of_origin_schema.signed_by_name": "서명자명",
+  "certificate_of_origin_schema.port_of_loading": "선적항",
+  "certificate_of_origin_schema.origin_criterion": "원산지 결정기준",
+  "certificate_of_origin_schema.total_net_weight": "총 순중량",
+  "certificate_of_origin_schema.port_of_discharge": "양하항",
+  "certificate_of_origin_schema.total_gross_weight": "총중량",
+  "certificate_of_origin_schema.total_package_count": "총 포장 수량",
+  "certificate_of_origin_schema.issuing_authority_name": "발급기관명",
+  "certificate_of_origin_schema.certification_statement": "증명 문구",
+  "certificate_of_origin_schema.copy_original_indicator": "원본/사본 구분",
+  "certificate_of_origin_schema.transport_document_number": "운송서류 번호",
+
+  // marine_cargo_insurance_schema (기본 및 v14 1건 추가)
+  "marine_cargo_insurance_schema.document_type": "문서 종류",
+  "marine_cargo_insurance_schema.policy_certificate_number": "보험증권/증명서 번호",
+  "marine_cargo_insurance_schema.policy_issue_date": "보험증권 발행일",
+  "marine_cargo_insurance_schema.insured_beneficiary_name": "피보험자/수익자명",
+  "marine_cargo_insurance_schema.lc_number": "L/C 번호",
+  "marine_cargo_insurance_schema.invoice_number": "송장 번호",
+  "marine_cargo_insurance_schema.vessel_name": "선박명",
+  "marine_cargo_insurance_schema.voyage_number": "항차 번호",
+  "marine_cargo_insurance_schema.port_of_loading": "선적항",
+  "marine_cargo_insurance_schema.port_of_discharge": "양하항",
+  "marine_cargo_insurance_schema.insured_amount": "부보금액",
+  "marine_cargo_insurance_schema.currency_code": "통화 코드",
+  "marine_cargo_insurance_schema.coverage_clauses_text": "담보조건 문구",
+  "marine_cargo_insurance_schema.claim_payable_text": "보험금 지급지 문구",
+  "marine_cargo_insurance_schema.package_count": "포장 수량",
+  "marine_cargo_insurance_schema.insured_goods_summary": "보험 목적물 요약",
+  "marine_cargo_insurance_schema.marks_numbers": "화인/마크",
+  // v14 추가 항목 (marine_cargo_insurance_schema)
+  "marine_cargo_insurance_schema.hs_code": "HS 코드",
+
+  // other_document_schema
+  "other_document_schema.document_type": "문서 종류",
+  "other_document_schema.document_title": "문서 제목",
+  "other_document_schema.document_subtitle": "문서 부제",
+  "other_document_schema.reference_number": "참조번호",
+  "other_document_schema.related_lc_number": "관련 L/C 번호",
+  "other_document_schema.related_invoice_number": "관련 송장 번호",
+  "other_document_schema.document_date": "문서 일자",
+  "other_document_schema.issuer_or_sender_name": "발행자/발신자명",
+  "other_document_schema.receiver_or_beneficiary_name": "수신자/수익자명",
+  "other_document_schema.document_summary": "문서 요약"
+};
+
 var FIELD_KO_MAP = {
   // 품명 및 물품
-  "line_items.product_name": "품명(물품명세)",
-  "product_name": "품명(물품명세)",
+  "line_items.product_name": "품목명",
+  "product_name": "품목명",
   "goods_description": "물품 명세",
   "description_of_goods": "물품 명세",
   "item_description": "품목 설명",
@@ -27,132 +199,175 @@ var FIELD_KO_MAP = {
   "line_items.quantity": "수량",
   "line_items.unit_price": "단가",
   "line_items.total_amount": "항목 금액",
-  "line_items.line_amount": "항목 금액",
+  "line_items.line_amount": "행 금액",
   "line_items.package_count": "포장 수량",
   "line_items.gross_weight": "총중량",
   "line_items.net_weight": "순중량",
-  "line_items.measurement_cbm": "용적(CBM)",
+  "line_items.measurement_cbm": "CBM",
   "line_items.hs_code": "HS 코드",
 
   // 화물 디테일 (B/L 등)
-  "cargo_details.cargo_description": "화물 명세(Description)",
+  "cargo_details.cargo_description": "화물 설명",
   "cargo_details.container_no": "컨테이너 번호",
   "cargo_details.seal_no": "봉인 번호",
   "cargo_details.gross_weight": "화물 총중량",
   "cargo_details.measurement": "화물 용적",
   "cargo_details.package_count": "화물 포장개수",
-  "cargo_description": "화물 명세",
+  "cargo_description": "화물 설명",
   
   // 식별 번호
-  "lc_number": "신용장(L/C) 번호",
-  "credit_number": "신용장(L/C) 번호",
+  "lc_number": "L/C 번호",
+  "credit_number": "L/C 번호",
   "lc_number_consistency": "신용장 번호 일치성",
-  "invoice_number": "상업송장 번호",
+  "invoice_number": "송장 번호",
   "invoice_number_consistency": "송장 번호 일치성",
-  "bl_number": "선하증권(B/L) 번호",
-  "bl_number_reference_consistency": "B/L 번호 일치성",
+  "bl_number": "B/L 번호",
+  "bl_number_reference_consistency": "B/L 번호 참조 일치성",
   "bill_of_lading_number": "B/L 번호",
-  "packing_list_number": "포장명세서 번호",
-  "po_number": "발주서(P.O.) 번호",
-  "policy_certificate_number": "보험증권 번호",
+  "packing_list_number": "패킹리스트 번호",
+  "po_number": "구매주문번호",
+  "policy_certificate_number": "보험증권/증명서 번호",
   "policy_number": "보험증권 번호",
   "certificate_number": "원산지증명서 번호",
-  "reference_number": "참조 번호",
+  "reference_number": "참조번호",
 
   // 당사자 정보
-  "applicant": "개설의뢰인(수입자)",
-  "buyer_name": "수입자(바이어)",
+  "applicant": "신청인(수입자)",
+  "applicant_name": "신청인명",
+  "buyer_name": "구매자명",
   "buyer_party_consistency": "수입자/수하인 정보 일치성",
-  "consignee": "수하인(Consignee)",
-  "consignee_name": "수하인(Consignee)",
-  "notify_party": "착하통지처(Notify Party)",
+  "consignee": "수하인명",
+  "consignee_name": "수하인명",
+  "notify_party": "착하통지처",
   "beneficiary": "수익자(수출자)",
-  "seller_name": "수출자(셀러)",
+  "beneficiary_name": "수익자명",
+  "seller_name": "판매자명",
+  "exporter_name": "수출자명",
+  "importer_name": "수입자명",
   "seller_party_consistency": "수출자/송하인 정보 일치성",
-  "shipper": "송하인(Shipper)",
-  "shipper_name": "송하인(Shipper)",
+  "shipper": "송하인명",
+  "shipper_name": "송하인명",
   "issuing_bank": "개설은행",
 
   // 날짜
   "lc_issue_date": "신용장 개설일",
-  "invoice_date": "송장 발행일",
-  "packing_list_date": "패킹리스트 발행일",
+  "invoice_date": "송장일자",
+  "packing_list_date": "패킹리스트 일자",
   "bl_shipment_date": "선하증권 선적일",
-  "bl_on_board_date": "본선적재일(On Board)",
+  "bl_on_board_date": "본선적재일",
   "bl_shipment_date_vs_latest_shipment": "선적일 vs 최종선적기한",
   "insurance_policy_issue_date_vs_shipment_date": "보험증권 발행일 vs 선적일",
   "date_flow_timeline": "문서 간 날짜 흐름",
-  "shipment_date": "선적일자",
-  "latest_shipment_date": "최종선적기한",
+  "shipment_date": "선적일",
+  "on_board_date": "본선적재일",
+  "latest_shipment_date": "최종 선적기한",
   "insurance_policy_issue_date": "보험증권 발행일",
   "issue_date": "발행일자",
   "date_of_issue": "발행일자",
+  "signature_date": "서명일자",
 
   // 수량, 중량, 용적
   "quantity": "수량",
   "unit_price": "단가",
-  "total_amount": "총 금액",
+  "total_amount": "총금액",
   "package_count_consistency": "포장 수량 일치성",
   "gross_weight_consistency": "총중량 일치성",
   "measurement_cbm_consistency": "CBM 일치성",
   "invoice_value": "송장 가액",
   "currency_code": "통화 코드",
-  "gross_weight": "총중량(Gross Weight)",
-  "net_weight": "순중량(Net Weight)",
-  "package_count": "포장 개수(Packages)",
-  "measurement_cbm": "용적(CBM)",
-  "cbm": "용적(CBM)",
-  "total_package_count": "총 포장개수",
-  "total_gross_weight": "총중량(Gross Weight)",
-  "total_net_weight": "순중량(Net Weight)",
-  "total_measurement_cbm": "총 용적(CBM)",
+  "gross_weight": "총중량",
+  "net_weight": "순중량",
+  "package_count": "포장 수량",
+  "measurement_cbm": "CBM",
+  "cbm": "CBM",
+  "total_package_count": "총 포장 수량",
+  "total_gross_weight": "총중량",
+  "total_net_weight": "총 순중량",
+  "total_measurement_cbm": "총 CBM",
 
   // 운송 및 조건
-  "port_of_loading": "선적항(POL)",
-  "port_of_discharge": "양하항(POD)",
+  "port_of_loading": "선적항",
+  "port_of_discharge": "양하항",
   "place_of_delivery": "인도지",
-  "payment_terms": "결제 조건",
+  "payment_terms": "지급조건",
   "payment_terms_consistency": "지급조건 일치성",
-  "freight_terms": "운임 조건",
+  "freight_terms": "운임조건",
   "freight_terms_consistency": "운임조건 일치성",
-  "incoterms": "인코텀즈(가격조건)",
+  "incoterms": "인코텀즈",
   "vessel_name": "선박명",
   "voyage_number": "항차 번호",
   "container_number": "컨테이너 번호",
   "seal_number": "봉인 번호",
-  "country_of_origin": "원산지",
+  "country_of_origin": "원산지 국가",
+  "origin_criterion": "원산지 결정기준",
   "hs_code": "HS 코드",
-  "document_type": "서류 종류",
-  "document_title": "서류 명칭",
+  "hs_code_consistency": "HS 코드 일치성",
+  "document_type": "문서 종류",
+  "document_title": "문서 제목",
   "file_presence": "서류 구비 현황",
   "required_documents_presence": "L/C 요구서류 충족 여부",
-  "insured_amount": "보험가액",
-  "insurance_amount": "보험가액",
-  "coverage_terms": "담보 조건",
+  "insured_amount": "부보금액",
+  "insurance_amount": "부보금액",
+  "coverage_terms": "담보조건",
   "insurance_clauses": "보험 조항",
   "clauses": "보험 약관"
 };
 
-function getKoreanFieldLabel(raw) {
+function getFieldLabelKo(schemaName, fieldName) {
+  if (!fieldName) return "";
+  var fn = String(fieldName).trim();
+  if (schemaName) {
+    var full = schemaName + "." + fn;
+    if (FIELD_LABELS_KO[full]) return FIELD_LABELS_KO[full];
+  }
+  if (FIELD_LABELS_KO[fn]) return FIELD_LABELS_KO[fn];
+  if (FIELD_KO_MAP[fn]) return FIELD_KO_MAP[fn];
+  var fnLower = fn.toLowerCase();
+  if (FIELD_KO_MAP[fnLower]) return FIELD_KO_MAP[fnLower];
+  return fn;
+}
+
+function getEvidenceFieldLabelKo(docType, fieldName) {
+  if (!fieldName) return "";
+  var normDoc = typeof normalizeDocType === "function" ? normalizeDocType(docType) : docType;
+  var schemaName = DOC_TYPE_TO_SCHEMA[normDoc] || DOC_TYPE_TO_SCHEMA[docType] || (docType ? (docType + "_schema") : "");
+  return getFieldLabelKo(schemaName, fieldName);
+}
+
+function getKoreanFieldLabel(raw, docType) {
   if (!raw) return "";
   var s = String(raw).trim();
-  
+
   // 콜론(:)으로 키와 값이 연결된 경우 (예: "line_items.product_name: LED DISPLAY...")
   if (s.indexOf(":") >= 0) {
     var parts = s.split(":");
     var kPart = parts[0].trim();
     var vPart = parts.slice(1).join(":").trim();
-    var koK = getKoreanFieldLabel(kPart);
+    var koK = getKoreanFieldLabel(kPart, docType);
     return koK + ": " + vPart;
   }
 
   if (/[가-힣]/.test(s)) {
     return s;
   }
-  
+
+  if (docType) {
+    var fromEvidence = getEvidenceFieldLabelKo(docType, s);
+    if (fromEvidence && fromEvidence !== s) return fromEvidence;
+  }
+
+  // schema.field 형태인 경우
+  if (s.indexOf("_schema.") >= 0) {
+    if (FIELD_LABELS_KO[s]) return FIELD_LABELS_KO[s];
+    var parts2 = s.split(".");
+    var fnOnly = parts2.slice(1).join(".");
+    if (FIELD_KO_MAP[fnOnly]) return FIELD_KO_MAP[fnOnly];
+  }
+
   var key = s.toLowerCase();
   if (FIELD_KO_MAP[key]) return FIELD_KO_MAP[key];
-  
+  if (FIELD_LABELS_KO[key]) return FIELD_LABELS_KO[key];
+
   var mapKeys = Object.keys(FIELD_KO_MAP);
   for (var i = 0; i < mapKeys.length; i++) {
     var mk = mapKeys[i];
@@ -160,7 +375,7 @@ function getKoreanFieldLabel(raw) {
       return FIELD_KO_MAP[mk];
     }
   }
-  
+
   return s;
 }
 
@@ -298,7 +513,7 @@ function getEvidenceTarget(sampleIdx, docType, evidenceDoc, checkItemKey) {
   var normSrc = normalizeSource(evidenceDoc.source);
   if (normSrc && normSrc.page > 0 && normSrc.boxes.length > 0) {
     var rawField = evidenceDoc.field_name || checkItemKey || "";
-    var koField = getKoreanFieldLabel(rawField);
+    var koField = getEvidenceFieldLabelKo(docType, rawField) || getKoreanFieldLabel(rawField, docType);
     var valSnippet = evidenceDoc.value != null ? (": " + String(evidenceDoc.value).slice(0, 35)) : "";
     return {
       page: normSrc.page,
@@ -1161,6 +1376,13 @@ function enrichComparisonMatrix(structured) {
     }
 
     var itemKey = row.check_item || row.check_item_ko || row.label;
+
+    // v14 HS Code 일치성 점검 항목 지원
+    if (itemKey === "hs_code" || itemKey === "hs_code_consistency") {
+      if (!row.check_item_ko) row.check_item_ko = "HS 코드 일치성";
+      if (!row.category) row.category = "물품 및 조건";
+    }
+
     var isFilePresence = itemKey === "file_presence" ||
                          itemKey === "required_documents_presence" ||
                          (row.check_item_ko && (row.check_item_ko.indexOf("서류 구비") >= 0 || row.check_item_ko.indexOf("서류구비") >= 0));
@@ -1691,6 +1913,22 @@ function enrichChecklistWithApiExtractions(checklists) {
 
   var normMap = typeof normalizeDocType === "function" ? normalizeDocType : function (d) { return d; };
 
+  // 0. API가 직접 반환한 document_checklists 내부 항목의 evidence 정규화
+  Object.keys(checklists).forEach(function (docKey) {
+    var items = checklists[docKey];
+    if (!Array.isArray(items)) return;
+    items.forEach(function (it) {
+      if (!it) return;
+      var rawEv = it.source || it.evidence || (it.location && it.location.source);
+      var src = normalizeSource(rawEv);
+      if (src) {
+        it.source = src;
+        it.page = src.page;
+        it.box = src.boxes[0];
+      }
+    });
+  });
+
   // 1. check_results로부터 BBox 및 페이지 위치 주입
   if (currentCheckResults && currentCheckResults.length > 0) {
     currentCheckResults.forEach(function (cr) {
@@ -1704,7 +1942,7 @@ function enrichChecklistWithApiExtractions(checklists) {
         var list = checklists[normKey];
 
         var rawTitle = cr.label || cr.check_item_ko || cr.check_item || "";
-        var targetTitle = getKoreanFieldLabel(rawTitle);
+        var targetTitle = getEvidenceFieldLabelKo(normKey, rawTitle) || getKoreanFieldLabel(rawTitle, normKey);
         var existing = list.find(function (it) {
           return it && (it.item === targetTitle || it.check_item === cr.check_item || (it.item && it.item.indexOf(targetTitle) >= 0));
         });
@@ -2100,7 +2338,7 @@ function loadConfig() {
       if (CONFIG.configId && els.configId) {
         els.configId.value = CONFIG.configId;
       } else if (els.configId && !els.configId.value) {
-        els.configId.value = "11";
+        els.configId.value = "14";
       }
     });
 }
@@ -2224,7 +2462,7 @@ function createJob(apiKey, fileId, configId) {
     ]
   };
 
-  var effectiveConfigId = configId || (CONFIG && CONFIG.configId) || "11";
+  var effectiveConfigId = configId || (CONFIG && CONFIG.configId) || "14";
   if (effectiveConfigId) {
     body.config_id = effectiveConfigId;
   }
@@ -2640,6 +2878,23 @@ async function checkUrlParamAndLoadFromDb() {
  * AI-OCR 판독 신뢰도 산출 (사용자 질문 4 대응)
  */
 function calculateOcrReliability(parsed, finalJob) {
+  // 0순위: API v14 결과값에 직접 신뢰성 수치가 제공된 경우
+  if (parsed && typeof parsed === "object") {
+    var apiScore = parsed.ocr_reliability_score != null ? parsed.ocr_reliability_score :
+                   (parsed.reliability_score != null ? parsed.reliability_score :
+                   (parsed.overall_confidence_score != null ? parsed.overall_confidence_score : null));
+    if (typeof apiScore === "number") {
+      var s = apiScore > 1 ? apiScore : Math.round(apiScore * 1000) / 10;
+      s = Math.max(50, Math.min(100, Math.round(s * 10) / 10));
+      return {
+        score: s,
+        grade: s >= 95 ? "HIGH" : (s >= 85 ? "MED" : "LOW"),
+        statusText: s >= 95 ? "우수" : (s >= 85 ? "보통" : "주의"),
+        from_api: true
+      };
+    }
+  }
+
   var confScores = [];
   var noisyFields = 0;
 
@@ -2729,6 +2984,11 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
 
     var ocrRel = calculateOcrReliability(parsed, finalJob);
 
+    var jId = (finalJob && finalJob.id) || currentJobId || "";
+    var durSec = (finalJob && typeof finalJob._duration_seconds === "number") ? finalJob._duration_seconds : 0;
+    var durMs = (finalJob && typeof finalJob._duration_ms === "number") ? finalJob._duration_ms : Math.round(durSec * 1000);
+    var tokens = (finalJob && finalJob.usage && finalJob.usage.total_tokens) || null;
+
     var insertData = {
       file_name: file.name,
       storage_path: storagePath || ("pdfs/" + file.name),
@@ -2741,12 +3001,18 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
       status: status,
       mismatch_count: mismatchCount,
       api_info: {
-        model: finalJob.model || "agt_hYy33EbPU93zggAb6W9z3G",
-        config_id: configId,
+        job_id: jId,
+        duration_seconds: durSec,
+        processing_time_ms: durMs,
         ocr_confidence: ocrRel.score,
         reliability_grade: ocrRel.grade,
-        ocr_status: ocrRel.statusText
+        ocr_status: ocrRel.statusText,
+        model: finalJob.model || (CONFIG && CONFIG.agentId) || "agt_hYy33EbPU93zggAb6W9z3G",
+        config_id: configId || (CONFIG && CONFIG.configId) || "14",
+        total_tokens: tokens
       },
+      job_id: jId,
+      duration_seconds: durSec,
       result_json: finalJob
     };
 
@@ -2758,7 +3024,11 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
         banner.style.display = "flex";
         bannerText.innerHTML = `
           <i class="bi bi-cloud-check-fill" style="color: #10b981; font-size: 16px;"></i>
-          <span><strong>[Supabase DB 저장 완료]</strong> 서류 점검 데이터가 안전하게 등록되었습니다. (신뢰도: <strong>${ocrRel.score}% ${ocrRel.statusText}</strong> / 수입자: <strong>${escapeHtml(applicant)}</strong> / 수출자: <strong>${escapeHtml(beneficiary)}</strong>)</span>
+          <span><strong>[Supabase DB 저장 완료]</strong> 서류 점검 데이터가 안전하게 등록되었습니다. 
+          (Job: <strong>${escapeHtml(jId ? (jId.slice(0, 14) + '...') : '-')}</strong> | 
+           수행시간: <strong>${durSec > 0 ? (durSec + '초') : '-'}</strong> | 
+           신뢰도: <strong>${ocrRel.score}% ${ocrRel.statusText}</strong> | 
+           수입자: <strong>${escapeHtml(applicant)}</strong>)</span>
         `;
       }
       console.log("Saved to Supabase DB successfully!");
@@ -2822,6 +3092,7 @@ function runWorkflow() {
     }
   }
 
+  var jobStartTime = Date.now();
   var fileSizeKb = selectedFile.size ? Math.round(selectedFile.size / 1024) : 0;
   setStatus("파일 업로드 중 (" + fileSizeKb + " KB)...", selectedFile.name || "");
 
@@ -2844,6 +3115,11 @@ function runWorkflow() {
       return pollJob(apiKey, currentJobId);
     })
     .then(function (finalJob) {
+      var durationMs = Date.now() - jobStartTime;
+      var durationSec = Math.round((durationMs / 1000) * 10) / 10;
+      finalJob._duration_ms = durationMs;
+      finalJob._duration_seconds = durationSec;
+
       var rawText;
       var parsed;
 
@@ -2866,7 +3142,7 @@ function runWorkflow() {
 
       parsed = parseResultText(rawText);
       renderResult(parsed, finalJob);
-      setStatus("완료", "job_id=" + currentJobId);
+      setStatus("완료", "job_id=" + currentJobId + " | 소요시간=" + durationSec + "s");
       els.runBtn.disabled = false;
 
       // Supabase DB 1행 자동 INSERT (사용자 핵심 요구사항 3단계)

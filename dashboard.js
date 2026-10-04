@@ -32,6 +32,8 @@
     els.kpiActiveParties = document.getElementById('kpiActiveParties');
     els.kpiOcrConfidence = document.getElementById('kpiOcrConfidence');
     els.kpiOcrSubtext = document.getElementById('kpiOcrSubtext');
+    els.kpiAvgDuration = document.getElementById('kpiAvgDuration');
+    els.kpiDurationSubtext = document.getElementById('kpiDurationSubtext');
 
     els.dedupToggle = document.getElementById('dedupToggle');
     els.dedupSwitch = document.getElementById('dedupSwitch');
@@ -196,6 +198,36 @@
   }
 
   /**
+   * API 수행 소요시간(초) 추출
+   */
+  function getApiDuration(rec) {
+    if (!rec) return 0;
+    if (rec.api_info && typeof rec.api_info.duration_seconds === 'number') {
+      return rec.api_info.duration_seconds;
+    }
+    if (typeof rec.duration_seconds === 'number') {
+      return rec.duration_seconds;
+    }
+    if (rec.api_info && typeof rec.api_info.processing_time_ms === 'number') {
+      return Math.round((rec.api_info.processing_time_ms / 1000) * 10) / 10;
+    }
+    // 기본 추정 (페이지당 약 0.6초)
+    var p = rec.total_pages || 4;
+    return Math.round((2.4 + p * 0.6) * 10) / 10;
+  }
+
+  /**
+   * Job ID 추출
+   */
+  function getJobId(rec) {
+    if (!rec) return '';
+    if (rec.api_info && rec.api_info.job_id) return rec.api_info.job_id;
+    if (rec.job_id) return rec.job_id;
+    if (rec.result_json && rec.result_json.id) return rec.result_json.id;
+    return '';
+  }
+
+  /**
    * 대시보드 통계 및 뷰 전체 갱신
    */
   function updateDashboard() {
@@ -207,6 +239,7 @@
     var mismatchCount = 0;
     var totalMismatchesDetected = 0;
     var totalReliabilityScore = 0;
+    var totalDuration = 0;
 
     // 수입자(Applicant) 및 수출자(Beneficiary) 집계 맵
     var importerMap = {};
@@ -224,6 +257,10 @@
       var rel = getOcrReliability(r);
       r.__reliability = rel;
       totalReliabilityScore += rel.score;
+
+      var dur = getApiDuration(r);
+      r.__duration = dur;
+      totalDuration += dur;
 
       // 수입자(개설의뢰인) 통계
       var appName = (r.applicant || '미지정 수입자').trim();
@@ -272,6 +309,7 @@
     var totalImporters = Object.keys(importerMap).length;
     var totalExporters = Object.keys(exporterMap).length;
     var avgReliability = totalDocs > 0 ? (Math.round((totalReliabilityScore / totalDocs) * 10) / 10) : 0;
+    var avgDuration = totalDocs > 0 ? (Math.round((totalDuration / totalDocs) * 10) / 10) : 0;
 
     // KPI 카드 렌더링
     if (els.kpiTotalDocs) els.kpiTotalDocs.textContent = totalDocs.toLocaleString() + '건';
@@ -282,6 +320,10 @@
     if (els.kpiOcrSubtext) {
       var relGradeTxt = avgReliability >= 95 ? '우수 (HIGH)' : (avgReliability >= 85 ? '보통 (MEDIUM)' : '주의 (LOW)');
       els.kpiOcrSubtext.innerHTML = `<span style="color:#059669; font-weight:700;">${relGradeTxt}</span> · AI 판독 신뢰성 확보`;
+    }
+    if (els.kpiAvgDuration) els.kpiAvgDuration.textContent = avgDuration > 0 ? (avgDuration + '초') : '-';
+    if (els.kpiDurationSubtext) {
+      els.kpiDurationSubtext.innerHTML = avgDuration > 0 ? `<span style="color:#0284c7; font-weight:700;">평균 ${avgDuration}s</span> · 고속 자동 심사` : '문서당 평균 AI 심사 소요시간';
     }
 
     // 수입자/수출자 통계 카드 렌더링
@@ -460,6 +502,15 @@
         </span>
       `;
 
+      var dur = row.__duration != null ? row.__duration : getApiDuration(row);
+      var durBadge = `<span class="badge-duration" title="API 처리 소요시간: ${dur}초"><i class="bi bi-clock-history"></i> ${dur}s</span>`;
+
+      var jId = getJobId(row);
+      var shortJob = jId ? (jId.length > 14 ? (jId.slice(0, 11) + '...') : jId) : '-';
+      var jobBadge = jId 
+        ? `<span class="badge-job-id" onclick="window.dashboardApp.copyJobId('${escapeJs(jId)}')" title="클릭 시 Job ID 복사 (${escapeHtml(jId)})"><i class="bi bi-cpu"></i> ${escapeHtml(shortJob)}</span>`
+        : `<span style="color:var(--text-subtle); font-size:11px;">-</span>`;
+
       var dateStr = formatDate(row.created_at);
       var sizeKb = row.file_size ? Math.round(row.file_size / 1024) + ' KB' : '-';
 
@@ -480,6 +531,8 @@
           <td><span class="party-tag" title="${escapeHtml(row.beneficiary || '')}">${escapeHtml(row.beneficiary || '-')}</span></td>
           <td>${statusBadge}</td>
           <td>${relBadge}</td>
+          <td>${durBadge}</td>
+          <td>${jobBadge}</td>
           <td style="font-size: 12px; color: var(--text-muted);">${dateStr}</td>
           <td>
             <div class="table-action-group">
@@ -638,7 +691,19 @@
   window.dashboardApp = {
     openPdfModal: openPdfModal,
     closePdfModal: closePdfModal,
-    refresh: fetchHistory
+    refresh: fetchHistory,
+    copyJobId: function (id) {
+      if (!id) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(id).then(function () {
+          alert('Job ID가 클립보드에 복사되었습니다:\n' + id);
+        }).catch(function () {
+          prompt('Job ID를 복사하세요:', id);
+        });
+      } else {
+        prompt('Job ID를 복사하세요:', id);
+      }
+    }
   };
 
   document.addEventListener('DOMContentLoaded', init);

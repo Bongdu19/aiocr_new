@@ -697,10 +697,10 @@
     if (!ok) return;
 
     try {
-      if (!supabase) {
+      if (!supabaseClient) {
         throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
       }
-      var res = await supabase.from('ocr_history').delete().eq('id', id);
+      var res = await supabaseClient.from('ocr_history').delete().eq('id', id);
       if (res.error) {
         throw res.error;
       }

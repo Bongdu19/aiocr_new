@@ -479,7 +479,7 @@
     if (filtered.length === 0) {
       els.docTableBody.innerHTML = `
         <tr>
-          <td colspan="9" class="table-empty-state">
+          <td colspan="11" class="table-empty-state">
             <i class="bi bi-inbox"></i>
             <p>조건에 일치하는 점검 서류가 없습니다.</p>
           </td>
@@ -520,8 +520,8 @@
           <td>
             <div class="file-name-cell">
               <i class="bi bi-file-earmark-pdf-fill"></i>
-              <div>
-                <div>${escapeHtml(row.file_name || '이름 없음')}</div>
+              <div class="file-name-info">
+                <div class="file-name-text" title="${escapeHtml(row.file_name || '이름 없음')}">${escapeHtml(row.file_name || '이름 없음')}</div>
                 <div style="font-size: 11px; color: var(--text-subtle);">${sizeKb} · ${row.total_pages || 1}p</div>
               </div>
             </div>
@@ -537,11 +537,14 @@
           <td>
             <div class="table-action-group">
               <button type="button" class="btn-table-action" onclick="window.dashboardApp.openPdfModal('${escapeJs(row.pdf_url)}', '${escapeJs(row.file_name)}')">
-                <i class="bi bi-file-pdf"></i> 원문 PDF
+                <i class="bi bi-file-pdf"></i> PDF
               </button>
               <a href="inspect.html?id=${encodeURIComponent(row.id)}" class="btn-table-action btn-table-action-primary">
-                <i class="bi bi-search"></i> 상세 점검
+                <i class="bi bi-search"></i> 점검
               </a>
+              <button type="button" class="btn-table-action btn-table-action-danger" onclick="window.dashboardApp.deleteRecord('${escapeJs(row.id)}', '${escapeJs(row.file_name)}')" title="이 서류 기록 삭제">
+                <i class="bi bi-trash3"></i> 삭제
+              </button>
             </div>
           </td>
         </tr>
@@ -687,11 +690,44 @@
     }
   }
 
+  async function deleteRecord(id, fileName) {
+    if (!id) return;
+    var nameStr = fileName ? `"${fileName}"` : '선택한 서류 점검 이력';
+    var ok = window.confirm(`${nameStr}을(를) 데이터베이스에서 영구 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.`);
+    if (!ok) return;
+
+    try {
+      if (!supabase) {
+        throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
+      }
+      var res = await supabase.from('ocr_history').delete().eq('id', id);
+      if (res.error) {
+        throw res.error;
+      }
+
+      // 로컬 데이터에서도 제거
+      allRecords = allRecords.filter(function (r) {
+        return String(r.id) !== String(id);
+      });
+
+      alert(`${nameStr} 서류가 데이터베이스에서 삭제되었습니다.`);
+
+      // 통계, 필터, 테이블 실시간 재렌더링
+      computeAnalytics();
+      populateFilters();
+      renderDocTable();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('삭제 중 오류가 발생했습니다: ' + (err.message || err));
+    }
+  }
+
   // Expose global methods for inline HTML callbacks
   window.dashboardApp = {
     openPdfModal: openPdfModal,
     closePdfModal: closePdfModal,
     refresh: fetchHistory,
+    deleteRecord: deleteRecord,
     copyJobId: function (id) {
       if (!id) return;
       if (navigator.clipboard && navigator.clipboard.writeText) {

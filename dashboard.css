@@ -479,10 +479,11 @@
 }
 
 .data-table td {
-  padding: 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-main);
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .data-table tr:hover {
@@ -499,11 +500,29 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  max-width: 200px;
 }
 
 .file-name-cell i {
   color: #ef4444;
   font-size: 18px;
+  flex-shrink: 0;
+}
+
+.file-name-info {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .badge-status {
@@ -623,22 +642,23 @@
 
 .party-tag {
   display: inline-block;
-  max-width: 160px;
+  max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
   color: var(--text-muted);
   background: var(--bg-primary);
-  padding: 2px 7px;
+  padding: 3px 8px;
   border-radius: 4px;
   border: 1px solid var(--border-color);
+  vertical-align: middle;
 }
 
 .table-action-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   white-space: nowrap;
 }
 
@@ -672,6 +692,18 @@
 .btn-table-action-primary:hover {
   background: var(--accent-primary);
   color: #ffffff;
+}
+
+.btn-table-action-danger {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+.btn-table-action-danger:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
 }
 
 /* Empty Table State */

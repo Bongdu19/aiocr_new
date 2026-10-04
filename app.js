@@ -1907,170 +1907,251 @@ function renderComparisonTable(rows) {
   });
 }
 
-/* Render Per-Document Checklist Tabs & Content */
-function enrichChecklistWithApiExtractions(checklists) {
-  if (!checklists || typeof checklists !== "object") checklists = {};
+/* ==========================================================================
+   서류별 개별 상세 체크리스트 정규화 엔진 (6대 무역서류 탭 고정 및 원문 증거 BBox 팝업 연동)
+   ========================================================================== */
 
-  var normMap = typeof normalizeDocType === "function" ? normalizeDocType : function (d) { return d; };
+var STANDARD_TRADE_DOC_DEFS = [
+  {
+    key: "lc",
+    label: "L/C 신용장",
+    aliases: ["lc", "letterofcredit", "신용장", "loc", "lc_schema", "letter_of_credit"]
+  },
+  {
+    key: "commercial_invoice",
+    label: "상업송장 (INV)",
+    aliases: ["commercial_invoice", "invoice", "commercialinvoice", "inv", "ci", "상업송장", "송장", "commercial_invoice_schema"]
+  },
+  {
+    key: "bill_of_lading",
+    label: "선하증권 (B/L)",
+    aliases: ["bill_of_lading", "bl", "billoflading", "bol", "선하증권", "선하증권bl", "선하증권b/l", "bill_of_lading_schema"]
+  },
+  {
+    key: "packing_list",
+    label: "포장명세서 (PK)",
+    aliases: ["packing_list", "pl", "packing", "packinglist", "패킹리스트", "포장명세서", "packing_list_schema"]
+  },
+  {
+    key: "marine_cargo_insurance",
+    label: "해상보험 (INS)",
+    aliases: ["marine_cargo_insurance", "insurance", "ins", "marinecargoinsurance", "policy", "해상적하보험증권", "보험증권", "해상보험", "marine_cargo_insurance_schema"]
+  },
+  {
+    key: "certificate_of_origin",
+    label: "원산지증명 (COO)",
+    aliases: ["certificate_of_origin", "coo", "co", "certificateoforigin", "원산지증명서", "원산지증명", "certificate_of_origin_schema"]
+  },
+  {
+    key: "other_document",
+    label: "도착통지서 등 (NOTICE)",
+    aliases: ["other_document", "other", "otherdocument", "기타문서", "기타", "도착통지서 등 (notice)", "notice"]
+  }
+];
 
-  // 0. API가 직접 반환한 document_checklists 내부 항목의 evidence 정규화
-  Object.keys(checklists).forEach(function (docKey) {
-    var items = checklists[docKey];
-    if (!Array.isArray(items)) return;
-    items.forEach(function (it) {
-      if (!it) return;
-      var rawEv = it.source || it.evidence || (it.location && it.location.source);
-      var src = normalizeSource(rawEv);
-      if (src) {
-        it.source = src;
-        it.page = src.page;
-        it.box = src.boxes[0];
+function normalizeToStandardDocKey(rawKey) {
+  if (!rawKey) return null;
+  var s = String(rawKey).toLowerCase().trim();
+  // 파이프라인 단계나 임의의 중간 객체는 절대 서류 탭으로 처리하지 않음
+  if (s.indexOf("step") === 0 || s.indexOf("object") >= 0 || s.indexOf("instruct") >= 0 || s.indexOf("merge") >= 0) {
+    return null;
+  }
+  var clean = s.replace(/[\s\-_]+/g, "");
+  for (var i = 0; i < STANDARD_TRADE_DOC_DEFS.length; i++) {
+    var def = STANDARD_TRADE_DOC_DEFS[i];
+    if (def.key === s || def.key.replace(/[\s\-_]+/g, "") === clean) {
+      return def.key;
+    }
+    for (var j = 0; j < def.aliases.length; j++) {
+      var a = def.aliases[j];
+      if (a === s || a.replace(/[\s\-_]+/g, "") === clean) {
+        return def.key;
+      }
+    }
+  }
+  return null;
+}
+
+function findEvidenceForCheckItem(docKey, itemTitle, itemDetail) {
+  var searchText = (String(itemTitle || "") + " " + String(itemDetail || "")).toLowerCase();
+  
+  // 키워드 ➔ 스키마 필드 매핑 규칙
+  var KEYWORD_RULES = [
+    { regex: /신용장|lc|l\/c/i, fields: ["lc_number"] },
+    { regex: /송장\s*번호|invoice\s*no/i, fields: ["invoice_number"] },
+    { regex: /송장|인보이스/i, fields: ["invoice_number", "invoice_date"] },
+    { regex: /선하증권|b\/?l\s*번호/i, fields: ["bl_number"] },
+    { regex: /선하증권|b\/?l/i, fields: ["bl_number", "shipment_date", "on_board_date"] },
+    { regex: /보험증권\s*번호|policy/i, fields: ["policy_certificate_number"] },
+    { regex: /보험|담보/i, fields: ["policy_certificate_number", "policy_issue_date", "coverage_clauses_text", "insured_amount"] },
+    { regex: /원산지|증명서\s*번호|certificate/i, fields: ["certificate_number", "country_of_origin"] },
+    { regex: /만기일|유효기일|expiry/i, fields: ["expiry_date"] },
+    { regex: /선적일|본선적재|선적기한|on\s*board|shipment/i, fields: ["latest_shipment_date", "shipment_date", "on_board_date"] },
+    { regex: /양하항|도착항|discharge/i, fields: ["port_of_discharge"] },
+    { regex: /선적항|선적지|loading/i, fields: ["port_of_loading"] },
+    { regex: /수출자|송하인|판매자|수익자|seller|shipper|beneficiary/i, fields: ["seller_name", "shipper_name", "beneficiary_name", "exporter_name"] },
+    { regex: /수입자|수하인|구매자|개설의뢰인|applicant|buyer|consignee/i, fields: ["buyer_name", "consignee_name", "applicant_name", "importer_name"] },
+    { regex: /금액|통화|amount|currency/i, fields: ["total_amount", "credit_amount", "insured_amount"] },
+    { regex: /포장수량|수량|package|carton|ctn/i, fields: ["total_package_count", "package_count", "cargo_details.package_count", "line_items.quantity"] },
+    { regex: /중량|총중량|순중량|weight|kg/i, fields: ["total_gross_weight", "cargo_details.gross_weight", "total_net_weight"] },
+    { regex: /용적|cbm|measurement/i, fields: ["total_measurement_cbm", "cargo_details.measurement_cbm"] },
+    { regex: /클린\s*온보드|클린|clean/i, fields: ["on_board_date", "bl_number"] },
+    { regex: /담보조건|약관|보험조건/i, fields: ["coverage_clauses_text", "insured_amount"] },
+    { regex: /선박|모선|항차|vessel|voyage/i, fields: ["vessel_name", "voyage_number"] },
+    { regex: /요구서류|충족\s*여부|required/i, fields: ["required_documents", "document_type"] },
+    { regex: /참조번호|reference/i, fields: ["reference_number", "po_number"] },
+    { regex: /hs코드|hscode/i, fields: ["hs_code", "line_items.product_name"] }
+  ];
+
+  var candidateFields = [];
+  for (var r = 0; r < KEYWORD_RULES.length; r++) {
+    if (KEYWORD_RULES[r].regex.test(searchText)) {
+      candidateFields = candidateFields.concat(KEYWORD_RULES[r].fields);
+    }
+  }
+
+  // A. document_extract_evidence[docKey] 에서 검색
+  var rawStructured = currentRawPayload && (currentRawPayload.structured_result || (currentRawPayload.instruct_result && currentRawPayload.instruct_result.structured_result));
+  var docExtractEv = (rawStructured && rawStructured.document_extract_evidence) || {};
+  var docEvObj = docExtractEv[docKey] || {};
+
+  for (var f = 0; f < candidateFields.length; f++) {
+    var fn = candidateFields[f];
+    var hit = docEvObj[fn];
+    if (hit) {
+      var normS = normalizeSource(hit.source || hit.evidence || hit);
+      if (normS && normS.page > 0) return normS;
+    }
+  }
+
+  // B. currentExtractDocMap[docKey] 에서 검색
+  if (currentExtractDocMap) {
+    var fldMap = currentExtractDocMap[docKey] || {};
+    for (var f2 = 0; f2 < candidateFields.length; f2++) {
+      var fn2 = candidateFields[f2];
+      var rawF = fldMap[fn2];
+      if (rawF) {
+        var src = (typeof convertOcrLocationToBox === "function" ? convertOcrLocationToBox(rawF) : null) || normalizeSource(rawF);
+        if (src && src.page > 0) return src;
+      }
+    }
+  }
+
+  // C. currentCheckItemEvidence 에서 검색
+  if (currentCheckItemEvidence && currentCheckItemEvidence.length > 0) {
+    for (var ci = 0; ci < currentCheckItemEvidence.length; ci++) {
+      var cie = currentCheckItemEvidence[ci];
+      if (cie && cie.documents && cie.documents[docKey]) {
+        var dObj = cie.documents[docKey];
+        var s = normalizeSource(dObj.source || dObj.evidence || dObj);
+        if (s && s.page > 0) {
+          if (candidateFields.indexOf(dObj.field_name) >= 0 || searchText.indexOf(String(cie.check_item || "").toLowerCase()) >= 0) {
+            return s;
+          }
+        }
+      }
+    }
+  }
+
+  // D. default 서류 기본 페이지 fallback
+  var sIdx = currentActiveSampleIndex || 1;
+  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
+  var defPage = (reg.docPages && reg.docPages[docKey]) ? reg.docPages[docKey] : 1;
+  return { page: defPage, boxes: [] };
+}
+
+function enrichChecklistWithApiExtractions(rawChecklists) {
+  var normalizedData = {};
+
+  // 1. 입력 rawChecklists에서 6대 정규 서류 키만 매핑 (파이프라인 중간 단계 및 덤프 배제)
+  if (rawChecklists && typeof rawChecklists === "object") {
+    if (Array.isArray(rawChecklists)) {
+      // checklist_results 배열 형태인 경우
+      rawChecklists.forEach(function (it) {
+        if (!it) return;
+        var stdKey = normalizeToStandardDocKey(it.document_type || it.docKey);
+        if (!stdKey) return;
+        if (!normalizedData[stdKey]) normalizedData[stdKey] = [];
+        normalizedData[stdKey].push({
+          item: cleanText(it.summary || it.item || it.title || "국제표준규칙 준수 점검"),
+          status: it.status || "pass",
+          details: cleanText(it.detail || it.details || it.summary || ""),
+          check_item: it.check_item || null,
+          source: normalizeSource(it.source || it.evidence)
+        });
+      });
+    } else {
+      // document_checklists 객체 형태인 경우
+      Object.keys(rawChecklists).forEach(function (rawKey) {
+        var stdKey = normalizeToStandardDocKey(rawKey);
+        if (!stdKey) return; // 파이프라인 단계나 비정규 키 무시
+        if (!normalizedData[stdKey]) normalizedData[stdKey] = [];
+
+        var items = rawChecklists[rawKey];
+        if (Array.isArray(items)) {
+          items.forEach(function (it) {
+            if (!it) return;
+            normalizedData[stdKey].push({
+              item: cleanText(it.item || it.title || "규정 준수 점검"),
+              status: it.status || "pass",
+              details: cleanText(it.detail || it.details || it.desc || ""),
+              check_item: it.check_item || null,
+              source: normalizeSource(it.source || it.evidence)
+            });
+          });
+        }
+      });
+    }
+  }
+
+  // 2. 만약 특정 서류가 normalizedData에 아예 없지만 comparison_matrix에 데이터가 있는 경우 보강
+  var structured = currentRawPayload && (currentRawPayload.structured_result || (currentRawPayload.instruct_result && currentRawPayload.instruct_result.structured_result));
+  var compMatrix = (structured && structured.comparison_matrix) || [];
+  if (compMatrix.length > 0) {
+    STANDARD_TRADE_DOC_DEFS.forEach(function (def) {
+      var stdKey = def.key;
+      if (normalizedData[stdKey] && normalizedData[stdKey].length > 0) return; // 이미 체크리스트 있음
+
+      // comparison_matrix에서 이 서류에 값이 있는 항목들 추출
+      var relevantChecks = [];
+      compMatrix.forEach(function (row) {
+        if (!row) return;
+        var val = row[stdKey];
+        if (val !== undefined && val !== null && String(val).trim() !== "" && String(val).trim() !== "-") {
+          relevantChecks.push({
+            item: cleanText(row.check_item_ko || row.check_item || "일치성 점검"),
+            status: row.result || "pass",
+            details: String(val) + (row.note ? " (" + row.note + ")" : ""),
+            check_item: row.check_item
+          });
+        }
+      });
+
+      if (relevantChecks.length > 0) {
+        normalizedData[stdKey] = relevantChecks;
+      }
+    });
+  }
+
+  // 3. 각 체크리스트 항목에 원본 PDF 증거(BBox 및 Page) 스마트 바인딩
+  Object.keys(normalizedData).forEach(function (stdKey) {
+    var list = normalizedData[stdKey];
+    list.forEach(function (item) {
+      if (!item.source || !item.source.page) {
+        var foundSrc = findEvidenceForCheckItem(stdKey, item.item, item.details);
+        if (foundSrc) {
+          item.source = foundSrc;
+          item.page = foundSrc.page;
+          item.box = (foundSrc.boxes && foundSrc.boxes.length > 0) ? foundSrc.boxes[0] : null;
+        }
+      } else {
+        item.page = item.source.page;
+        item.box = (item.source.boxes && item.source.boxes.length > 0) ? item.source.boxes[0] : null;
       }
     });
   });
 
-  // 1. check_results로부터 BBox 및 페이지 위치 주입
-  if (currentCheckResults && currentCheckResults.length > 0) {
-    currentCheckResults.forEach(function (cr) {
-      if (!cr || !cr.documents) return;
-      Object.keys(cr.documents).forEach(function (docKey) {
-        var normKey = normMap(docKey) || docKey;
-        var docItem = cr.documents[docKey];
-        if (!docItem) return;
-
-        if (!checklists[normKey]) checklists[normKey] = [];
-        var list = checklists[normKey];
-
-        var rawTitle = cr.label || cr.check_item_ko || cr.check_item || "";
-        var targetTitle = getEvidenceFieldLabelKo(normKey, rawTitle) || getKoreanFieldLabel(rawTitle, normKey);
-        var existing = list.find(function (it) {
-          return it && (it.item === targetTitle || it.check_item === cr.check_item || (it.item && it.item.indexOf(targetTitle) >= 0));
-        });
-
-        var src = normalizeSource(docItem.source);
-        if (existing) {
-          if (src && (!existing.source || !existing.source.boxes || existing.source.boxes.length === 0)) {
-            existing.source = src;
-            existing.page = src.page;
-            existing.box = src.boxes[0];
-          }
-          if (docItem.value && (!existing.details || existing.details === "-")) {
-            existing.details = String(docItem.value);
-          }
-        } else {
-          list.push({
-            item: targetTitle,
-            status: cr.status || "pass",
-            details: docItem.value != null ? String(docItem.value) : (cr.message || ""),
-            source: src,
-            page: src ? src.page : null,
-            box: (src && src.boxes) ? src.boxes[0] : null,
-            check_item: cr.check_item
-          });
-        }
-      });
-    });
-  }
-
-  // 2. currentExtractDocMap (Step 2, Step 3 extraction data)로부터 세부 추출 필드 보강
-  if (currentExtractDocMap && typeof currentExtractDocMap === "object") {
-    var ignoredKeys = {
-      "previous_step_name": true, "step_run_id": true, "occurrence_id": true,
-      "job_execution_id": true, "cache_hit": true, "page_ranges": true,
-      "source_files": true, "document_type": true
-    };
-
-    Object.keys(currentExtractDocMap).forEach(function (docTypeKey) {
-      var normKey = normMap(docTypeKey) || docTypeKey;
-      var fldMap = currentExtractDocMap[docTypeKey];
-      if (!fldMap || typeof fldMap !== "object") return;
-
-      if (!checklists[normKey]) checklists[normKey] = [];
-      var list = checklists[normKey];
-
-      Object.keys(fldMap).forEach(function (fKey) {
-        if (ignoredKeys[fKey]) return;
-        var fVal = fldMap[fKey];
-        if (!fVal) return;
-
-        // Array of rows (e.g. line_items)
-        if (Array.isArray(fVal)) {
-          fVal.forEach(function (rowObj, rowIdx) {
-            if (!rowObj || typeof rowObj !== "object") return;
-            Object.keys(rowObj).forEach(function (subK) {
-              var subItem = rowObj[subK];
-              if (!subItem) return;
-              var subValStr = subItem._value != null ? String(subItem._value) : (subItem.value != null ? String(subItem.value) : (typeof subItem === "string" ? subItem : ""));
-              if (!subValStr || subValStr.trim() === "") return;
-
-              var subKoTitle = getKoreanFieldLabel("line_items." + subK);
-              var fullTitle = subKoTitle + (fVal.length > 1 ? " #" + (rowIdx + 1) : "");
-
-              var src = (typeof convertOcrLocationToBox === "function" ? convertOcrLocationToBox(subItem) : null) || normalizeSource(subItem);
-              var confScore = typeof subItem.confidence_score === "number" ? Math.round(subItem.confidence_score * 1000) / 10 : null;
-              var confText = confScore ? ` · 신뢰도 ${confScore}%` : "";
-
-              var already = list.find(function (it) {
-                return it.item === fullTitle || (it.details && it.details.indexOf(subValStr.slice(0, 15)) >= 0);
-              });
-
-              if (already) {
-                if (src && !already.source) {
-                  already.source = src;
-                  already.page = src.page;
-                  already.box = src.boxes[0];
-                }
-              } else {
-                list.push({
-                  item: fullTitle,
-                  status: (subItem.confidence === "low" || (confScore && confScore < 90)) ? "warning" : "pass",
-                  details: subValStr + confText,
-                  source: src,
-                  page: src ? src.page : null,
-                  box: (src && src.boxes) ? src.boxes[0] : null,
-                  is_extracted: true
-                });
-              }
-            });
-          });
-          return;
-        }
-
-        // Single scalar field
-        var valStr = fVal._value != null ? String(fVal._value) : (fVal.value != null ? String(fVal.value) : (typeof fVal === "string" ? fVal : ""));
-        if (!valStr || valStr.trim() === "") return;
-
-        var koTitle = getKoreanFieldLabel(fKey);
-        var src = (typeof convertOcrLocationToBox === "function" ? convertOcrLocationToBox(fVal) : null) || normalizeSource(fVal);
-        var confScore = typeof fVal.confidence_score === "number" ? Math.round(fVal.confidence_score * 1000) / 10 : null;
-        var confText = confScore ? ` · 신뢰도 ${confScore}%` : "";
-
-        var already = list.find(function (it) {
-          return it.item === koTitle || (it.details && it.details.indexOf(valStr.slice(0, 15)) >= 0);
-        });
-
-        if (already) {
-          if (src && !already.source) {
-            already.source = src;
-            already.page = src.page;
-            already.box = src.boxes[0];
-          }
-        } else {
-          list.push({
-            item: koTitle,
-            status: (fVal.confidence === "low" || (confScore && confScore < 90)) ? "warning" : "pass",
-            details: valStr + confText,
-            source: src,
-            page: src ? src.page : null,
-            box: (src && src.boxes) ? src.boxes[0] : null,
-            is_extracted: true
-          });
-        }
-      });
-    });
-  }
-
-  return checklists;
+  return normalizedData;
 }
 
 function selectChecklistTab(docKey) {
@@ -2104,7 +2185,7 @@ function selectChecklistTab(docKey) {
     item = items[i];
     statusBadge = badgeClass(item.status);
 
-    var hasLoc = item.source && item.source.page > 0 && Array.isArray(item.source.boxes) && item.source.boxes.length > 0;
+    var hasLoc = item.source && item.source.page > 0;
     var pageNum = hasLoc ? item.source.page : (item.page || 0);
 
     var itemClass = "checklist-item" + (pageNum > 0 ? " clickable-checklist-item" : "");
@@ -2138,9 +2219,8 @@ function selectChecklistTab(docKey) {
 
       var targetPage = (itemObj.source && itemObj.source.page > 0) ? itemObj.source.page : (itemObj.page || 1);
       var targetBox = (itemObj.source && itemObj.source.boxes && itemObj.source.boxes[0]) ? itemObj.source.boxes[0] : (itemObj.box || null);
-      var rawTitle = itemObj.item || itemObj.title || "";
-      var koTitle = getKoreanFieldLabel(rawTitle);
-      var targetLabel = koTitle + (itemObj.details ? ": " + String(itemObj.details).slice(0, 30) : "");
+      var rawTitle = itemObj.item || itemObj.title || "점검 항목";
+      var targetLabel = rawTitle + (itemObj.details ? ": " + String(itemObj.details).slice(0, 30) : "");
 
       openDocViewer(currentActiveSampleIndex || 1, targetPage, targetBox, targetLabel);
     });
@@ -2150,10 +2230,17 @@ function selectChecklistTab(docKey) {
 function renderChecklists(documentChecklists) {
   if (!els.checklistTabs || !els.checklistContent) return;
 
-  // API 추출 항목 및 BBox 위치 통합 보강 (사용자 요구사항 3)
+  // 6대 정규 무역서류 탭 고정 및 원문 증거 1:1 바인딩
   documentChecklists = enrichChecklistWithApiExtractions(documentChecklists || {});
 
-  if (!documentChecklists || typeof documentChecklists !== "object" || Object.keys(documentChecklists).length === 0) {
+  var hasAny = false;
+  STANDARD_TRADE_DOC_DEFS.forEach(function (def) {
+    if (documentChecklists[def.key] && documentChecklists[def.key].length > 0) {
+      hasAny = true;
+    }
+  });
+
+  if (!hasAny) {
     els.checklistTabs.innerHTML = "";
     els.checklistContent.innerHTML = '<div class="empty-cell">서류별 체크리스트 데이터가 없습니다.</div>';
     return;
@@ -2161,45 +2248,32 @@ function renderChecklists(documentChecklists) {
 
   currentChecklistData = documentChecklists;
 
-  var docLabels = {
-    lc: "L/C 신용장",
-    invoice: "상업송장 (INV)",
-    commercial_invoice: "상업송장 (INV)",
-    bl: "선하증권 (B/L)",
-    bill_of_lading: "선하증권 (B/L)",
-    packing_list: "포장명세서 (PK)",
-    insurance: "해상보험 (INS)",
-    marine_cargo_insurance: "해상보험 (INS)",
-    coo: "원산지증명 (COO)",
-    certificate_of_origin: "원산지증명 (COO)",
-    other_document: "도착통지서 등 (NOTICE)"
-  };
-
   var tabsHtml = "";
-  var keys = Object.keys(documentChecklists);
-  var firstKey = keys[0];
+  var firstActiveKey = null;
 
-  keys.forEach(function (key) {
-    var items = documentChecklists[key] || [];
-    var label = docLabels[key] || (key.toUpperCase() + " 서류");
-    
+  STANDARD_TRADE_DOC_DEFS.forEach(function (def) {
+    var key = def.key;
+    var items = documentChecklists[key];
+    if (!items || items.length === 0) return; // 데이터가 없는 서류 탭은 생략
+
+    if (!firstActiveKey) firstActiveKey = key;
+
     var critCount = 0;
     var warnCount = 0;
     var passCount = 0;
 
     items.forEach(function (it) {
       var st = String(it.status || "").toLowerCase();
-      if (st === "fail" || st === "crit" || st === "mismatch" || st === "missing" || st.indexOf("불일치") >= 0) {
+      if (st === "fail" || st === "crit" || st === "critical" || st === "mismatch" || st === "missing" || st.indexOf("불일치") >= 0) {
         critCount += 1;
       } else if (st === "warning" || st === "warn" || st === "review_required" || st === "unclear" || st.indexOf("검토") >= 0) {
         warnCount += 1;
-      } else if (st === "pass" || st === "ok" || st === "match" || st.indexOf("일치") >= 0) {
+      } else {
         passCount += 1;
       }
     });
 
     var tabClass = "tab-btn-neutral";
-
     if (critCount > 0) {
       tabClass = "tab-btn-crit";
     } else if (warnCount > 0) {
@@ -2209,7 +2283,7 @@ function renderChecklists(documentChecklists) {
     }
 
     tabsHtml += '<button type="button" class="tab-btn ' + tabClass + '" data-key="' + escapeHtml(key) + '">';
-    tabsHtml += '<span class="tab-label">' + escapeHtml(label) + '</span>';
+    tabsHtml += '<span class="tab-label">' + escapeHtml(def.label) + '</span>';
     tabsHtml += '</button>';
   });
 
@@ -2225,7 +2299,9 @@ function renderChecklists(documentChecklists) {
   });
 
   // Select first tab default
-  selectChecklistTab(firstKey);
+  if (firstActiveKey) {
+    selectChecklistTab(firstActiveKey);
+  }
 }
 
 function renderResult(parsed, finalJob) {
@@ -3045,7 +3121,7 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
 function runWorkflow() {
   var apiKey = trimValue(els.apiKey.value);
   var configId = trimValue(els.configId.value);
-  var sampleVal = els.sampleSelect ? parseInt(els.sampleSelect.value, 10) : 0;
+  var selVal = els.sampleSelect ? els.sampleSelect.value : "";
 
   if (!apiKey) {
     alert("API Key를 입력하세요.");
@@ -3053,11 +3129,12 @@ function runWorkflow() {
   }
 
   if (!selectedFile) {
-    if (sampleVal >= 1 && sampleVal <= 4) {
-      fillSample(sampleVal);
+    if (selVal && selVal.startsWith("db:")) {
+      var recId = selVal.replace("db:", "");
+      loadInspectionFromDbById(recId);
       return;
     }
-    alert("파일을 선택하거나 샘플 데이터셋을 선택하세요.");
+    alert("점검할 PDF 파일을 선택(업로드)하거나 DB 서류를 선택하세요.");
     return;
   }
 
@@ -3375,12 +3452,6 @@ function init() {
           if (val.startsWith("db:")) {
             var recId = val.replace("db:", "");
             loadInspectionFromDbById(recId);
-          } else {
-            var num = parseInt(val, 10);
-            if (num >= 1 && num <= 4) {
-              currentCustomPdfUrl = null;
-              fillSample(num);
-            }
           }
         });
       }

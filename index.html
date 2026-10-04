@@ -120,6 +120,20 @@
           <span>관리 중인 글로벌 거래 기업수</span>
         </div>
       </div>
+
+      <div class="kpi-card">
+        <div class="kpi-card-header">
+          <span class="kpi-label">AI-OCR 판독 신뢰도</span>
+          <div class="kpi-icon-box kpi-icon-blue">
+            <i class="bi bi-shield-check"></i>
+          </div>
+        </div>
+        <div id="kpiOcrConfidence" class="kpi-value">-</div>
+        <div class="kpi-subtext">
+          <i class="bi bi-cpu-fill" style="color: #2563eb;"></i>
+          <span id="kpiOcrSubtext">문서 원문 AI 판독 정확성 지수</span>
+        </div>
+      </div>
     </section>
 
     <!-- 2️⃣ Importer & Exporter Statistics Section (사용자 핵심 요구사항) -->
@@ -193,19 +207,20 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th style="width: 48px;">No</th>
+              <th style="width: 44px;">No</th>
               <th>서류명 (PDF)</th>
               <th>신용장(L/C) 번호</th>
               <th>수입자 (개설의뢰인)</th>
               <th>수출자 (수익자)</th>
               <th>판정 결과</th>
+              <th>AI 판독 신뢰도</th>
               <th>최종 점검 일시</th>
               <th style="width: 190px;">관리 작업</th>
             </tr>
           </thead>
           <tbody id="docTableBody">
             <tr>
-              <td colspan="8" class="table-empty-state">
+              <td colspan="9" class="table-empty-state">
                 <i class="bi bi-hourglass-split"></i>
                 <p>Supabase DB에서 서류 이력을 불러오는 중입니다...</p>
               </td>

@@ -2497,8 +2497,8 @@ function loadConfig() {
       }
       if (CONFIG.configId && els.configId) {
         els.configId.value = CONFIG.configId;
-      } else if (els.configId && !els.configId.value) {
-        els.configId.value = "14";
+      } else if (els.configId) {
+        els.configId.value = "";
       }
     });
 }
@@ -2622,7 +2622,7 @@ function createJob(apiKey, fileId, configId) {
     ]
   };
 
-  var effectiveConfigId = configId || (CONFIG && CONFIG.configId) || "14";
+  var effectiveConfigId = (configId || (CONFIG && CONFIG.configId) || "").trim();
   if (effectiveConfigId) {
     body.config_id = effectiveConfigId;
   }
@@ -3204,7 +3204,7 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
         reliability_grade: ocrRel.grade,
         ocr_status: ocrRel.statusText,
         model: finalJob.model || (CONFIG && CONFIG.agentId) || "agt_hYy33EbPU93zggAb6W9z3G",
-        config_id: configId || (CONFIG && CONFIG.configId) || "14",
+        config_id: configId || (CONFIG && CONFIG.configId) || "15",
         total_tokens: tokens
       },
       result_json: finalJob
@@ -4022,7 +4022,13 @@ function initDocViewerEvents() {
 
   // Window resize handler: adapt viewer size between mobile and desktop
   window.addEventListener("resize", function () {
-    if (!els.docViewerFloating || els.docViewerFloating.style.display === "none") return;
+    if (!els.docViewerFloating || els.docViewerFloating.style.display === "none") {
+      if (els.docViewerBackdrop) {
+        els.docViewerBackdrop.classList.remove("active");
+        els.docViewerBackdrop.style.display = "none";
+      }
+      return;
+    }
     if (window.innerWidth <= 768) {
       els.docViewerFloating.style.left = "";
       els.docViewerFloating.style.top = "";
@@ -4030,9 +4036,15 @@ function initDocViewerEvents() {
       els.docViewerFloating.style.bottom = "";
       els.docViewerFloating.style.width = "";
       els.docViewerFloating.style.height = "";
-      if (els.docViewerBackdrop) els.docViewerBackdrop.style.display = "block";
+      if (els.docViewerBackdrop) {
+        els.docViewerBackdrop.classList.add("active");
+        els.docViewerBackdrop.style.display = "block";
+      }
     } else {
-      if (els.docViewerBackdrop) els.docViewerBackdrop.style.display = "none";
+      if (els.docViewerBackdrop) {
+        els.docViewerBackdrop.classList.remove("active");
+        els.docViewerBackdrop.style.display = "none";
+      }
     }
   });
 }
@@ -4097,7 +4109,13 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
 
   // Backdrop on mobile
   if (els.docViewerBackdrop) {
-    els.docViewerBackdrop.style.display = isMobile ? "block" : "none";
+    if (isMobile) {
+      els.docViewerBackdrop.classList.add("active");
+      els.docViewerBackdrop.style.display = "block";
+    } else {
+      els.docViewerBackdrop.classList.remove("active");
+      els.docViewerBackdrop.style.display = "none";
+    }
   }
 
   // Android back button integration
@@ -4158,6 +4176,7 @@ function closeDocViewer(fromPopstate) {
     els.docViewerFloating.style.display = "none";
   }
   if (els.docViewerBackdrop) {
+    els.docViewerBackdrop.classList.remove("active");
     els.docViewerBackdrop.style.display = "none";
   }
 

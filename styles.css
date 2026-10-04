@@ -2115,12 +2115,17 @@ details.raw-json-details[open] {
 
 /* Modeless Floating Window Backdrop (Mobile Tap to Close) */
 .doc-viewer-backdrop {
+  display: none;
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.65);
   backdrop-filter: blur(3px);
   z-index: 9400;
   transition: opacity 0.2s ease;
+}
+
+.doc-viewer-backdrop.active {
+  display: block !important;
 }
 
 /* Modeless Floating Window Shell */
@@ -2698,8 +2703,11 @@ details.raw-json-details[open] {
 }
 
 @media (max-width: 768px) {
-  /* Backdrop overlay on mobile */
+  /* Backdrop overlay on mobile (only when viewer is open) */
   .doc-viewer-backdrop {
+    display: none;
+  }
+  .doc-viewer-backdrop.active {
     display: block !important;
   }
 

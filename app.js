@@ -3151,7 +3151,7 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
 
     var insertData = {
       file_name: file.name,
-      storage_path: storagePath || ("pdfs/" + file.name),
+      storage_path: storagePath || ("pdfs/" + Date.now() + ".pdf"),
       pdf_url: pdfUrl || "",
       file_size: file.size || 0,
       total_pages: (docViewerState && docViewerState.totalPages) || 1,
@@ -3171,8 +3171,6 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
         config_id: configId || (CONFIG && CONFIG.configId) || "14",
         total_tokens: tokens
       },
-      job_id: jId,
-      duration_seconds: durSec,
       result_json: finalJob
     };
 
@@ -3229,12 +3227,16 @@ function runWorkflow() {
   var supabasePublicUrl = null;
   var supabaseStoragePath = null;
 
-  // Supabase Storage 비동기 업로드 개시 (사용자 핵심 요구사항 1단계)
+  // Supabase Storage 비동기 업로드 개시 (안전한 ASCII Key 사용으로 Invalid key 방지)
+  var storageUploadPromise = null;
   if (currentSelectedFile && supabaseClient) {
     try {
       var bucket = (CONFIG.supabase && CONFIG.supabase.storageBucket) || "ocr-pdfs";
-      var filePath = "pdfs/" + Date.now() + "_" + encodeURIComponent(currentSelectedFile.name);
-      supabaseClient.storage.from(bucket).upload(filePath, currentSelectedFile, {
+      var fileExt = (currentSelectedFile.name.match(/\.[a-zA-Z0-9]+$/) || [".pdf"])[0].toLowerCase();
+      var randomKey = Math.random().toString(36).substring(2, 10);
+      var filePath = "pdfs/" + Date.now() + "_" + randomKey + fileExt;
+
+      storageUploadPromise = supabaseClient.storage.from(bucket).upload(filePath, currentSelectedFile, {
         contentType: currentSelectedFile.type || "application/pdf",
         upsert: false
       }).then(function (upRes) {
@@ -3244,9 +3246,14 @@ function runWorkflow() {
           supabasePublicUrl = pub && pub.data ? pub.data.publicUrl : null;
           currentCustomPdfUrl = supabasePublicUrl;
           console.log("Supabase PDF uploaded successfully:", supabasePublicUrl);
+          return { path: supabaseStoragePath, url: supabasePublicUrl };
         } else {
           console.warn("Supabase upload error:", upRes.error);
+          return null;
         }
+      }).catch(function (upErr) {
+        console.warn("Supabase Storage catch upload error:", upErr);
+        return null;
       });
     } catch (e) {
       console.warn("Supabase Storage init upload error:", e);
@@ -3308,7 +3315,15 @@ function runWorkflow() {
 
       // Supabase DB 1행 자동 INSERT (사용자 핵심 요구사항 3단계)
       if (currentSelectedFile && supabaseClient) {
-        saveInspectionToSupabase(currentSelectedFile, supabaseStoragePath, supabasePublicUrl, parsed, finalJob, configId);
+        if (storageUploadPromise) {
+          storageUploadPromise.then(function (uploadResult) {
+            var finalPath = (uploadResult && uploadResult.path) || supabaseStoragePath;
+            var finalUrl = (uploadResult && uploadResult.url) || supabasePublicUrl;
+            saveInspectionToSupabase(currentSelectedFile, finalPath, finalUrl, parsed, finalJob, configId);
+          });
+        } else {
+          saveInspectionToSupabase(currentSelectedFile, supabaseStoragePath, supabasePublicUrl, parsed, finalJob, configId);
+        }
       }
     })
     .catch(function (error) {

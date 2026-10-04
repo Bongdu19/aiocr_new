@@ -706,16 +706,16 @@
       }
 
       // 로컬 데이터에서도 제거
-      allRecords = allRecords.filter(function (r) {
-        return String(r.id) !== String(id);
-      });
-
-      alert(`${nameStr} 서류가 데이터베이스에서 삭제되었습니다.`);
+      if (state.allRecords && Array.isArray(state.allRecords)) {
+        state.allRecords = state.allRecords.filter(function (r) {
+          return String(r.id) !== String(id);
+        });
+      }
 
       // 통계, 필터, 테이블 실시간 재렌더링
-      computeAnalytics();
-      populateFilters();
-      renderDocTable();
+      updateDashboard();
+
+      alert(`${nameStr} 서류가 데이터베이스에서 삭제되었습니다.`);
     } catch (err) {
       console.error('Delete failed:', err);
       alert('삭제 중 오류가 발생했습니다: ' + (err.message || err));

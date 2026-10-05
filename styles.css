@@ -2932,3 +2932,216 @@ details.raw-json-details[open] {
   }
 }
 
+/* ==========================================================================
+   v17 HS Code 종합 카드 & 문서별 일치성 배너
+   ========================================================================== */
+.hscode-summary-card {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.hscode-summary-card.has-mismatch {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.035);
+}
+
+[data-theme="dark"] .hscode-summary-card.has-mismatch {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.hscode-summary-card.has-match {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.03);
+}
+
+[data-theme="dark"] .hscode-summary-card.has-match {
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(16, 185, 129, 0.07);
+}
+
+.hscode-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hscode-main-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hscode-tag-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent-primary);
+  background: rgba(37, 99, 235, 0.1);
+  padding: 4px 9px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+[data-theme="dark"] .hscode-tag-label {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.hscode-main-val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 16.5px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.hscode-main-val.clickable-key:hover {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: var(--accent-primary);
+  cursor: pointer;
+  transform: translateY(-1px);
+}
+
+.hscode-docs-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+  font-size: 12.5px;
+}
+
+.hscode-docs-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 2px;
+}
+
+.hscode-doc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3.5px 9px;
+  border-radius: 6px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.hscode-doc-pill[data-doc] {
+  cursor: pointer;
+}
+
+.hscode-doc-pill[data-doc]:hover {
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.hscode-doc-pill.mismatch {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #dc2626;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .hscode-doc-pill.mismatch {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #f87171;
+}
+
+.hscode-doc-pill strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   v17 체크리스트 observed_value 중심 표시 & details 축소 배지
+   ========================================================================== */
+.checklist-item-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.checklist-detail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.checklist-observed-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-main);
+  max-width: 100%;
+}
+
+[data-theme="dark"] .checklist-observed-box {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.checklist-observed-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-primary, #2563eb);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.checklist-observed-val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-main);
+  word-break: break-all;
+}
+

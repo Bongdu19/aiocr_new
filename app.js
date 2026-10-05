@@ -93,6 +93,8 @@ var FIELD_LABELS_KO = {
   "bill_of_lading_schema.cargo_details.package_count": "포장 수량",
   "bill_of_lading_schema.cargo_details.gross_weight": "총중량",
   "bill_of_lading_schema.cargo_details.measurement_cbm": "CBM",
+  // v17 B/L 추가 항목
+  "bill_of_lading_schema.hs_code": "HS 코드",
 
   // packing_list_schema
   "packing_list_schema.document_type": "문서 종류",
@@ -175,14 +177,25 @@ var FIELD_LABELS_KO = {
   // v14 추가 항목 (marine_cargo_insurance_schema)
   "marine_cargo_insurance_schema.hs_code": "HS 코드",
 
-  // other_document_schema
+  // other_document_schema (기본 및 v17 확장 항목)
   "other_document_schema.document_type": "문서 종류",
   "other_document_schema.document_title": "문서 제목",
   "other_document_schema.document_subtitle": "문서 부제",
   "other_document_schema.reference_number": "참조번호",
   "other_document_schema.related_lc_number": "관련 L/C 번호",
   "other_document_schema.related_invoice_number": "관련 송장 번호",
+  "other_document_schema.related_bl_number": "관련 B/L 번호",
   "other_document_schema.document_date": "문서 일자",
+  "other_document_schema.amount": "금액",
+  "other_document_schema.total_amount": "총금액",
+  "other_document_schema.payment_due_date": "결제기한",
+  "other_document_schema.due_date": "결제기한",
+  "other_document_schema.payment_terms": "결제조건",
+  "other_document_schema.hs_code": "HS 코드",
+  "other_document_schema.port_of_loading": "선적항",
+  "other_document_schema.port_of_discharge": "양하항",
+  "other_document_schema.goods_summary": "물품 요약",
+  "other_document_schema.package_count": "포장 수량",
   "other_document_schema.issuer_or_sender_name": "발행자/발신자명",
   "other_document_schema.receiver_or_beneficiary_name": "수신자/수익자명",
   "other_document_schema.document_summary": "문서 요약"
@@ -230,6 +243,9 @@ var FIELD_KO_MAP = {
   "policy_number": "보험증권 번호",
   "certificate_number": "원산지증명서 번호",
   "reference_number": "참조번호",
+  "related_bl_number": "관련 B/L 번호",
+  "payment_due_date": "결제기한",
+  "due_date": "결제기한",
 
   // 당사자 정보
   "applicant": "신청인(수입자)",
@@ -508,6 +524,27 @@ function getEvidence(checkItem, docType) {
           return row.documents[k];
         }
       }
+    }
+  }
+
+  // 3순위: document_extract_evidence 에서 탐색 (v17 HS Code, B/L hs_code, other_document 등)
+  var rawStructured = currentRawPayload && (currentRawPayload.structured_result || (currentRawPayload.instruct_result && currentRawPayload.instruct_result.structured_result));
+  var docExtractEv = (rawStructured && rawStructured.document_extract_evidence) || {};
+  var docHit = docExtractEv[normDoc] || docExtractEv[docType];
+  if (docHit) {
+    var fHit = docHit[targetKey] || (targetKey === "hs_code_consistency" ? docHit.hs_code : null);
+    if (!fHit && (targetKey === "hs_code" || targetKey === "hs_code_consistency")) {
+      fHit = docHit.hs_code || docHit["line_items.hs_code"];
+    }
+    if (!fHit && targetKey === "goods_description") {
+      fHit = docHit.goods_summary || docHit.cargo_description || docHit.item_description;
+    }
+    if (fHit) {
+      return {
+        value: typeof fHit === "object" ? fHit.value : fHit,
+        field_name: (typeof fHit === "object" && fHit.field_name) ? fHit.field_name : targetKey,
+        source: normalizeSource(fHit.source || fHit.evidence || fHit)
+      };
     }
   }
 
@@ -1454,8 +1491,9 @@ function enrichComparisonMatrix(structured) {
 
   rows.forEach(function (row) {
     if (!row) return;
-    if (!row.result && (row.status || row.judgment)) {
-      row.result = row.status || row.judgment;
+    row.result = row.result || row.verdict || row.status || row.judgment || "";
+    if (!row.verdict && row.result) {
+      row.verdict = row.result;
     }
 
     var itemKey = row.check_item || row.check_item_ko || row.label;
@@ -1539,6 +1577,61 @@ function enrichComparisonMatrix(structured) {
     }
   });
 
+  // v17 HS Code 일치성 행 자동 보완 및 B/L, other_document 반영
+  var hasHsRow = rows.some(function (r) {
+    if (!r) return false;
+    var k = r.check_item || r.check_item_ko || r.label;
+    return k === "hs_code" || k === "hs_code_consistency";
+  });
+
+  var hsInfo = collectAllHsCodes(structured, currentRawPayload);
+  if (!hasHsRow && Object.keys(hsInfo.docMap).length > 0) {
+    var newHsRow = {
+      category: "물품 및 조건",
+      check_item: "hs_code_consistency",
+      check_item_ko: "HS 코드 일치성",
+      result: hsInfo.status === "mismatch" ? "mismatch" : (hsInfo.status === "match" ? "match" : "unclear"),
+      commercial_invoice: (hsInfo.docMap.commercial_invoice && hsInfo.docMap.commercial_invoice.value) || "",
+      certificate_of_origin: (hsInfo.docMap.certificate_of_origin && hsInfo.docMap.certificate_of_origin.value) || "",
+      bill_of_lading: (hsInfo.docMap.bill_of_lading && hsInfo.docMap.bill_of_lading.value) || "",
+      packing_list: (hsInfo.docMap.packing_list && hsInfo.docMap.packing_list.value) || "",
+      marine_cargo_insurance: (hsInfo.docMap.marine_cargo_insurance && hsInfo.docMap.marine_cargo_insurance.value) || "",
+      other_document: (hsInfo.docMap.other_document && hsInfo.docMap.other_document.value) || "",
+      lc: (hsInfo.docMap.lc && hsInfo.docMap.lc.value) || "",
+      note: hsInfo.status === "mismatch" ? ("문서 간 HS Code 상이 (" + hsInfo.values.join(" vs ") + ")") : ""
+    };
+    var goodsIdx = -1;
+    for (var gi = 0; gi < rows.length; gi++) {
+      var rk = rows[gi] && (rows[gi].check_item || rows[gi].check_item_ko || rows[gi].label);
+      if (rk === "goods_description" || (rows[gi].check_item_ko && rows[gi].check_item_ko.indexOf("물품 명세") >= 0)) {
+        goodsIdx = gi;
+        break;
+      }
+    }
+    if (goodsIdx >= 0) {
+      rows.splice(goodsIdx + 1, 0, newHsRow);
+    } else {
+      rows.push(newHsRow);
+    }
+  } else if (hasHsRow) {
+    var existHsRow = rows.find(function (r) {
+      if (!r) return false;
+      var k = r.check_item || r.check_item_ko || r.label;
+      return k === "hs_code" || k === "hs_code_consistency";
+    });
+    if (existHsRow) {
+      if (!existHsRow.bill_of_lading && hsInfo.docMap.bill_of_lading) {
+        existHsRow.bill_of_lading = hsInfo.docMap.bill_of_lading.value;
+      }
+      if (!existHsRow.other_document && hsInfo.docMap.other_document) {
+        existHsRow.other_document = hsInfo.docMap.other_document.value;
+      }
+      if (hsInfo.status === "mismatch" && (!existHsRow.result || existHsRow.result === "match")) {
+        existHsRow.result = "mismatch";
+      }
+    }
+  }
+
   return structured;
 }
 
@@ -1567,23 +1660,143 @@ function simplifyKeyName(rawKey) {
   if (k === "bl_number" || k === "bl_no" || k === "bill_of_lading_number") return "BL_NO";
   if (k === "policy_certificate_number" || k === "insurance_policy_number" || k === "insurance_number") return "INS_NO";
   if (k === "certificate_number" || k === "coo_number" || k === "coo_no") return "COO_NO";
+  if (k === "hs_code" || k === "hscode") return "HS_CODE";
 
   return k.replace(/_number$/, "_no").replace(/_no$/, "_NO").toUpperCase();
 }
 
-function renderDocumentKeys(documentKeys) {
+/**
+ * v17 HS Code 수집 엔진
+ * 1) 대표 HS Code (document_keys.hs_code 또는 송장/원산지 우선)
+ * 2) 문서별 HS Code 맵 (상업송장, 원산지증명서, B/L, 패킹리스트 등)
+ * 3) 문서 간 불일치(mismatch) / 일치(match) / 단일기재 상태 산출
+ */
+function collectAllHsCodes(structured, rawSource, docKeysInput) {
+  var docMap = {};
+  var docKeys = docKeysInput || (structured && structured.document_keys) || {};
+  var repCode = cleanText(docKeys.hs_code || docKeys.hscode || "");
+
+  // A. document_extract_evidence
+  var rawSt = structured || (rawSource && (rawSource.structured_result || (rawSource.instruct_result && rawSource.instruct_result.structured_result)));
+  var docEv = (rawSt && rawSt.document_extract_evidence) || {};
+  Object.keys(docEv).forEach(function (dKey) {
+    var dObj = docEv[dKey];
+    if (dObj && dObj.hs_code) {
+      var val = typeof dObj.hs_code === "object" ? dObj.hs_code.value : dObj.hs_code;
+      if (hasMeaningfulValue(val)) {
+        var std = normalizeToStandardDocKey(dKey) || dKey;
+        docMap[std] = {
+          value: cleanText(val),
+          source: normalizeSource(dObj.hs_code.source || dObj.hs_code.evidence || dObj.hs_code)
+        };
+      }
+    }
+  });
+
+  // B. intermediate extraction steps in output
+  var stepsList = (rawSource && Array.isArray(rawSource.output)) ? rawSource.output : ((rawSource && Array.isArray(rawSource.steps)) ? rawSource.steps : null);
+  if (stepsList) {
+    stepsList.forEach(function (st) {
+      if (st && st.model && st.model.indexOf("Information Extract") >= 0 && Array.isArray(st.content)) {
+        st.content.forEach(function (c) {
+          if (c && c.text && c.type === "output_text") {
+            try {
+              var p = JSON.parse(c.text);
+              if (hasMeaningfulValue(p.hs_code)) {
+                var sName = st.model.replace(/^information extract\s*-\s*/i, "").replace(/_schema$/i, "").trim();
+                var stdKey = normalizeToStandardDocKey(sName) || sName;
+                if (!docMap[stdKey] || !docMap[stdKey].value) {
+                  var pAv = null;
+                  if (c.additional_values) {
+                    pAv = typeof c.additional_values === "string" ? JSON.parse(c.additional_values) : c.additional_values;
+                  }
+                  var avHs = pAv && pAv.hs_code;
+                  var src = avHs ? (typeof convertOcrLocationToBox === "function" ? convertOcrLocationToBox(avHs) : null) : null;
+                  docMap[stdKey] = {
+                    value: cleanText(p.hs_code),
+                    source: src
+                  };
+                }
+              }
+            } catch (e) {}
+          }
+        });
+      }
+    });
+  }
+
+  // C. comparison_matrix
+  var matrix = (structured && structured.comparison_matrix) || (rawSt && rawSt.comparison_matrix) || [];
+  var hsRow = matrix.find(function (r) {
+    if (!r) return false;
+    var k = r.check_item || r.check_item_ko || r.label;
+    return k === "hs_code" || k === "hs_code_consistency";
+  });
+  if (hsRow) {
+    ["commercial_invoice", "certificate_of_origin", "bill_of_lading", "packing_list", "marine_cargo_insurance", "other_document"].forEach(function (dk) {
+      if (hasMeaningfulValue(hsRow[dk]) && !docMap[dk]) {
+        docMap[dk] = { value: cleanText(hsRow[dk]), source: null };
+      }
+    });
+  }
+
+  // D. Fallback for repCode if not specified
+  if (!repCode) {
+    if (docMap.commercial_invoice && docMap.commercial_invoice.value) {
+      repCode = docMap.commercial_invoice.value;
+    } else if (docMap.certificate_of_origin && docMap.certificate_of_origin.value) {
+      repCode = docMap.certificate_of_origin.value;
+    } else {
+      var keys = Object.keys(docMap);
+      if (keys.length > 0) repCode = docMap[keys[0]].value;
+    }
+  }
+
+  // E. Unique values and consistency status
+  var values = [];
+  Object.keys(docMap).forEach(function (dk) {
+    var v = docMap[dk].value;
+    if (v && values.indexOf(v) === -1) {
+      values.push(v);
+    }
+  });
+
+  var status = "unclear";
+  if (values.length > 1) {
+    status = "mismatch";
+  } else if (values.length === 1) {
+    status = "match";
+  } else if (repCode) {
+    status = "single";
+  }
+
+  return {
+    repCode: repCode,
+    docMap: docMap,
+    values: values,
+    status: status
+  };
+}
+
+/**
+ * v17 document_keys 렌더링 엔진
+ * 1) 기본 식별번호 (LC, INV, BL, INS, COO) 칩 표시
+ * 2) 🌟 v17 HS Code 종합 카드 (대표 번호 / 문서별 값 / 불일치 배지 분리 표시)
+ */
+function renderDocumentKeys(documentKeys, structured, rawSource) {
   var html = "";
   var key;
   var displayKey;
   var cleanedVal;
 
   if (!documentKeys || typeof documentKeys !== "object") {
-    els.documentKeys.innerHTML = "결과 없음";
-    return;
+    documentKeys = {};
   }
 
+  // 1. 기존 주요 식별 번호 칩 렌더링 (hs_code는 아래 종합 카드에서 더 상세하게 렌더링)
   for (key in documentKeys) {
     if (Object.prototype.hasOwnProperty.call(documentKeys, key)) {
+      if (key === "hs_code" || key === "hscode") continue;
       cleanedVal = cleanText(documentKeys[key]);
       displayKey = simplifyKeyName(key);
       html += '<div class="kv-item clickable-key" data-key="' + escapeHtml(key) + '" title="클릭하여 원본 서류의 해당 번호 위치로 이동 및 하이라이트">';
@@ -1593,13 +1806,75 @@ function renderDocumentKeys(documentKeys) {
     }
   }
 
+  // 2. 🌟 v17 HS Code 종합 카드 (대표 HS Code / 문서별 HS Code 값 / 불일치 여부 3대 분리 표시)
+  var hsInfo = collectAllHsCodes(structured, rawSource, documentKeys);
+  var repCode = hsInfo.repCode || cleanText(documentKeys.hs_code || documentKeys.hscode || "");
+
+  if (repCode || Object.keys(hsInfo.docMap).length > 0) {
+    var isMismatch = hsInfo.status === "mismatch";
+    var isMatch = hsInfo.status === "match";
+    var statusClass = isMismatch ? "has-mismatch" : (isMatch ? "has-match" : "");
+
+    var statusBadgeHtml = "";
+    if (isMismatch) {
+      statusBadgeHtml = '<span class="badge badge-crit" style="font-size:11.5px; padding:3px 9px;"><i class="bi bi-exclamation-triangle-fill"></i> HS 코드 불일치 (' + hsInfo.values.length + '개 문서 상이)</span>';
+    } else if (isMatch) {
+      statusBadgeHtml = '<span class="badge badge-ok" style="font-size:11.5px; padding:3px 9px;"><i class="bi bi-check-circle-fill"></i> HS 코드 일치</span>';
+    } else {
+      statusBadgeHtml = '<span class="badge badge-neutral" style="font-size:11.5px; padding:3px 9px;"><i class="bi bi-info-circle"></i> 단일 문서 기재</span>';
+    }
+
+    html += '<div class="hscode-summary-card ' + statusClass + '">';
+    html += '<div class="hscode-header-row">';
+    html += '<div class="hscode-main-badge-group">';
+    html += '<span class="hscode-tag-label"><i class="bi bi-upc-scan"></i> HS_CODE (대표)</span>';
+    html += '<span class="hscode-main-val clickable-key" data-key="hs_code" title="클릭하여 원본 서류의 HS Code 위치로 이동">' + escapeHtml(repCode || "-") + '</span>';
+    html += '</div>';
+    html += '<div class="hscode-status-group">' + statusBadgeHtml + '</div>';
+    html += '</div>';
+
+    // 문서별 HS Code 상세 나열
+    html += '<div class="hscode-docs-row">';
+    html += '<span class="hscode-docs-title"><i class="bi bi-layers-half"></i> 문서별 기재값:</span>';
+
+    var docDefs = [
+      { key: "commercial_invoice", label: "상업송장" },
+      { key: "certificate_of_origin", label: "원산지증명" },
+      { key: "bill_of_lading", label: "B/L" },
+      { key: "packing_list", label: "패킹" },
+      { key: "marine_cargo_insurance", label: "해상보험" },
+      { key: "other_document", label: "기타(NOTICE)" }
+    ];
+
+    docDefs.forEach(function (dDef) {
+      var dHit = hsInfo.docMap[dDef.key];
+      var val = dHit ? dHit.value : "";
+      var isThisMismatch = isMismatch && val && hsInfo.values.indexOf(val) >= 0;
+      var pillClass = "hscode-doc-pill" + (isThisMismatch ? " mismatch" : "");
+      var clickAttr = val ? ' data-doc="' + escapeHtml(dDef.key) + '" data-key="hs_code" title="클릭하여 ' + dDef.label + ' 원문의 HS Code(' + escapeHtml(val) + ')로 이동"' : '';
+
+      html += '<span class="' + pillClass + '"' + clickAttr + '>';
+      html += '<span>' + dDef.label + ':</span> ';
+      html += '<strong>' + (val ? escapeHtml(val) : '<span style="color:var(--text-subtle);">-</span>') + '</strong>';
+      html += '</span>';
+    });
+
+    html += '</div>'; // end hscode-docs-row
+    html += '</div>'; // end hscode-summary-card
+  }
+
   els.documentKeys.innerHTML = html || "결과 없음";
 
-  var items = els.documentKeys.querySelectorAll(".clickable-key");
+  var items = els.documentKeys.querySelectorAll(".clickable-key, .hscode-doc-pill[data-doc]");
   items.forEach(function (el) {
     el.addEventListener("click", function () {
       var k = this.getAttribute("data-key");
-      openDocViewerWithField(k);
+      var d = this.getAttribute("data-doc");
+      if (k === "hs_code" && d) {
+        openDocViewerWithCheckItem("hs_code", d);
+      } else {
+        openDocViewerWithField(k, d);
+      }
     });
   });
 }
@@ -1829,7 +2104,7 @@ function renderComparisonTable(rows) {
     var critCount = 0;
 
     catRows.forEach(function (r) {
-      var res = String(r.result || r.status || r.judgment || "").toLowerCase();
+      var res = String(r.result || r.verdict || r.status || r.judgment || "").toLowerCase();
       if (
         res.indexOf("불일치") >= 0 ||
         res === "mismatch" ||
@@ -1839,9 +2114,11 @@ function renderComparisonTable(rows) {
         critCount += 1;
       } else if (
         res.indexOf("검토") >= 0 ||
+        res.indexOf("주의") >= 0 ||
         res === "review_required" ||
-        res === "unclear" ||
-        res === "warn"
+        res === "warning" ||
+        res === "warn" ||
+        res === "unclear"
       ) {
         warnCount += 1;
       } else if (
@@ -1913,7 +2190,7 @@ function renderComparisonTable(rows) {
 
     /* Member Rows & Mobile Cards */
     catRows.forEach(function (row) {
-      var rowResult = row.result || row.status || row.judgment || "";
+      var rowResult = row.result || row.verdict || row.status || row.judgment || "";
       var rowClass = rowHighlightClass(rowResult);
       var itemTitle = row.check_item_ko || row.check_item || "-";
 
@@ -2083,7 +2360,9 @@ function findEvidenceForCheckItem(docKey, itemTitle, itemDetail) {
     { regex: /선박|모선|항차|vessel|voyage/i, fields: ["vessel_name", "voyage_number"] },
     { regex: /요구서류|충족\s*여부|required/i, fields: ["required_documents", "document_type"] },
     { regex: /참조번호|reference/i, fields: ["reference_number", "po_number"] },
-    { regex: /hs코드|hscode/i, fields: ["hs_code", "line_items.product_name"] }
+    { regex: /b\/?l\s*번호|선하증권/i, fields: ["bl_number", "related_bl_number"] },
+    { regex: /결제기한|지급기한|결제조건|지급조건|due\s*date/i, fields: ["payment_due_date", "due_date", "payment_terms"] },
+    { regex: /hs코드|hscode|hs\s*code/i, fields: ["hs_code", "line_items.hs_code", "line_items.product_name"] }
   ];
 
   var candidateFields = [];
@@ -2159,6 +2438,7 @@ function enrichChecklistWithApiExtractions(rawChecklists) {
           item: cleanText(it.summary || it.item || it.title || "국제표준규칙 준수 점검"),
           status: it.status || "pass",
           details: cleanText(it.detail || it.details || it.summary || ""),
+          observed_value: it.observed_value != null ? cleanText(it.observed_value) : (it.value != null ? cleanText(it.value) : ""),
           check_item: it.check_item || null,
           source: normalizeSource(it.source || it.evidence)
         });
@@ -2178,6 +2458,7 @@ function enrichChecklistWithApiExtractions(rawChecklists) {
               item: cleanText(it.item || it.title || "규정 준수 점검"),
               status: it.status || "pass",
               details: cleanText(it.detail || it.details || it.desc || ""),
+              observed_value: it.observed_value != null ? cleanText(it.observed_value) : (it.value != null ? cleanText(it.value) : ""),
               check_item: it.check_item || null,
               source: normalizeSource(it.source || it.evidence)
             });
@@ -2188,7 +2469,7 @@ function enrichChecklistWithApiExtractions(rawChecklists) {
   }
 
   // 2. 만약 특정 서류가 normalizedData에 아예 없지만 comparison_matrix에 데이터가 있는 경우 보강
-  var structured = currentRawPayload && (currentRawPayload.structured_result || (currentRawPayload.instruct_result && currentRawPayload.instruct_result.structured_result));
+  var structured = currentRawPayload && (currentRawPayload.structured_result || (currentRawPayload.instruct_result && currentRawPayload.instruct_result.structured_result) || currentRawPayload);
   var compMatrix = (structured && structured.comparison_matrix) || [];
   if (compMatrix.length > 0) {
     STANDARD_TRADE_DOC_DEFS.forEach(function (def) {
@@ -2203,8 +2484,9 @@ function enrichChecklistWithApiExtractions(rawChecklists) {
         if (val !== undefined && val !== null && String(val).trim() !== "" && String(val).trim() !== "-") {
           relevantChecks.push({
             item: cleanText(row.check_item_ko || row.check_item || "일치성 점검"),
-            status: row.result || "pass",
-            details: String(val) + (row.note ? " (" + row.note + ")" : ""),
+            status: row.result || row.verdict || "pass",
+            details: row.note ? cleanText(row.note) : (row.notes ? cleanText(row.notes) : "확인됨"),
+            observed_value: cleanText(val),
             check_item: row.check_item
           });
         }
@@ -2216,12 +2498,74 @@ function enrichChecklistWithApiExtractions(rawChecklists) {
     });
   }
 
+  // 2.3 v17 B/L hs_code 체크리스트 자동 보강
+  var blEv = (structured && structured.document_extract_evidence && structured.document_extract_evidence.bill_of_lading);
+  if (blEv && blEv.hs_code && hasMeaningfulValue(blEv.hs_code.value || blEv.hs_code)) {
+    if (!normalizedData.bill_of_lading) normalizedData.bill_of_lading = [];
+    var existBlHs = normalizedData.bill_of_lading.some(function (it) {
+      return it.check_item === "hs_code" || (it.item && it.item.indexOf("HS") >= 0);
+    });
+    if (!existBlHs) {
+      var blHsVal = typeof blEv.hs_code === "object" ? blEv.hs_code.value : blEv.hs_code;
+      normalizedData.bill_of_lading.push({
+        item: "HS 코드 확인",
+        status: "pass",
+        details: "B/L 명시 기재됨",
+        observed_value: cleanText(blHsVal),
+        check_item: "hs_code",
+        source: normalizeSource(blEv.hs_code.source || blEv.hs_code.evidence || blEv.hs_code)
+      });
+    }
+  }
+
+  // 2.5 v17 other_document 확장 필드 자동 보강 (관련 B/L, 금액, 결제기한, HS code, 선적항/양하항, 물품요약, 포장수량 등)
+  var otherEv = (structured && structured.document_extract_evidence && structured.document_extract_evidence.other_document) || {};
+  var otherExtFields = [
+    { key: "document_title", label: "문서 제목" },
+    { key: "reference_number", label: "참조 번호" },
+    { key: "related_lc_number", label: "관련 L/C 번호" },
+    { key: "related_invoice_number", label: "관련 송장 번호" },
+    { key: "related_bl_number", label: "관련 B/L 번호" },
+    { key: "document_date", label: "문서 일자" },
+    { key: "amount", label: "금액", altKey: "total_amount" },
+    { key: "payment_due_date", label: "결제기한", altKey: "due_date" },
+    { key: "payment_terms", label: "결제조건" },
+    { key: "hs_code", label: "HS 코드" },
+    { key: "port_of_loading", label: "선적항" },
+    { key: "port_of_discharge", label: "양하항" },
+    { key: "goods_summary", label: "물품 요약" },
+    { key: "package_count", label: "포장 수량" },
+    { key: "issuer_or_sender_name", label: "발행/발송처" },
+    { key: "receiver_or_beneficiary_name", label: "수신/수익자" }
+  ];
+
+  if (!normalizedData.other_document) normalizedData.other_document = [];
+  otherExtFields.forEach(function (fld) {
+    var fHit = otherEv[fld.key] || (fld.altKey ? otherEv[fld.altKey] : null);
+    if (fHit && hasMeaningfulValue(fHit.value || fHit)) {
+      var exist = normalizedData.other_document.some(function (it) {
+        return it.check_item === fld.key || it.item === fld.label;
+      });
+      if (!exist) {
+        var fVal = typeof fHit === "object" ? fHit.value : fHit;
+        normalizedData.other_document.push({
+          item: fld.label,
+          status: "pass",
+          details: "값 확인됨",
+          observed_value: cleanText(fVal),
+          check_item: fld.key,
+          source: normalizeSource(fHit.source || fHit.evidence || fHit)
+        });
+      }
+    }
+  });
+
   // 3. 각 체크리스트 항목에 원본 PDF 증거(BBox 및 Page) 스마트 바인딩
   Object.keys(normalizedData).forEach(function (stdKey) {
     var list = normalizedData[stdKey];
     list.forEach(function (item) {
       if (!item.source || !item.source.page) {
-        var foundSrc = findEvidenceForCheckItem(stdKey, item.item, item.details);
+        var foundSrc = findEvidenceForCheckItem(stdKey, item.item, item.details || item.observed_value);
         if (foundSrc) {
           item.source = foundSrc;
           item.page = foundSrc.page;
@@ -2276,17 +2620,32 @@ function selectChecklistTab(docKey) {
       ? '<span class="checklist-jump-btn" title="클릭 시 PDF 원본 해당 위치로 이동"><i class="bi bi-box-arrow-in-up-right"></i> p.' + pageNum + ' 원문 보기</span>'
       : '';
 
+    var obsVal = cleanText(item.observed_value != null ? item.observed_value : (item.extracted_value != null ? item.extracted_value : (item.value != null ? item.value : "")));
+    var detailText = cleanText(item.details || item.desc || "");
+    var titleText = cleanText(item.item || item.title || "점검 항목");
+
     html += '<div class="' + itemClass + '" data-doc="' + escapeHtml(docKey) + '" data-idx="' + i + '">';
-    html += '<div style="flex: 1;">';
-    html += '<div class="checklist-item-title-row" style="display:flex; align-items:center; gap:8px;">';
-    html += '<div class="checklist-item-title">' + escapeHtml(cleanText(item.item || item.title || "점검 항목")) + '</div>';
+    html += '<div class="checklist-item-main" style="flex: 1; min-width: 0;">';
+    
+    // Title row with jump button and optional detail chip (details는 짧은 판정 라벨 배지로 축소)
+    html += '<div class="checklist-item-title-row">';
+    html += '<div class="checklist-item-title">' + escapeHtml(titleText) + '</div>';
+    if (detailText) {
+      html += '<span class="checklist-detail-chip" title="판정 세부">' + escapeHtml(detailText) + '</span>';
+    }
     html += jumpBtn;
     html += '</div>';
-    if (item.details || item.desc) {
-      html += '<div class="checklist-item-details">' + escapeHtml(cleanText(item.details || item.desc)) + '</div>';
+
+    // 🌟 observed_value 중심 강조 표시 (1순위 핵심 개선)
+    if (obsVal) {
+      html += '<div class="checklist-observed-box">';
+      html += '<span class="checklist-observed-label"><i class="bi bi-tag-fill"></i> 추출값:</span>';
+      html += '<span class="checklist-observed-val">' + escapeHtml(obsVal) + '</span>';
+      html += '</div>';
     }
+
     html += '</div>';
-    html += '<div><span class="' + statusBadge + '">' + escapeHtml(koreanStatus(item.status)) + '</span></div>';
+    html += '<div class="checklist-status-wrap"><span class="' + statusBadge + '">' + escapeHtml(koreanStatus(item.status)) + '</span></div>';
     html += '</div>';
   }
 
@@ -2466,13 +2825,13 @@ function renderResult(parsed, finalJob) {
     renderUsage(finalJob);
   }
 
-  renderDocumentKeys(data.document_keys);
+  renderDocumentKeys(data.document_keys, structured, currentRawPayload);
   renderDateTimeline(data.date_checks);
   if (structured) enrichComparisonMatrix(structured);
   if (data) enrichComparisonMatrix(data);
   rows = (structured && structured.comparison_matrix) || data.comparison_matrix || [];
   renderComparisonTable(rows);
-  renderChecklists(data.document_checklists || (structured && (structured.checklist_results || structured.document_checklists)));
+  renderChecklists((structured && structured.document_checklists) || data.document_checklists || (structured && structured.checklist_results));
 }
 
 function loadConfig() {
@@ -3236,7 +3595,7 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
     // 4. 불일치 및 주의(Warning/Review/Mismatch/주의) 정밀 판정
     var mismatchCount = 0;
     matrix.forEach(function (r) {
-      var res = String(r.result || r.status || "").toLowerCase().trim();
+      var res = String(r.result || r.verdict || r.status || "").toLowerCase().trim();
       var isMismatch = res === "mismatch" || res === "fail" || res === "warning" || res === "warn" ||
                        res === "review_required" || res === "unclear" ||
                        res.indexOf("불일치") >= 0 || res.indexOf("주의") >= 0 || res.indexOf("검토") >= 0 || res.indexOf("오류") >= 0;
@@ -3287,7 +3646,7 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
         reliability_grade: ocrRel.grade,
         ocr_status: ocrRel.statusText,
         model: finalJob.model || (CONFIG && CONFIG.agentId) || "agt_hYy33EbPU93zggAb6W9z3G",
-        config_id: configId || (CONFIG && CONFIG.configId) || "15",
+        config_id: configId || (CONFIG && CONFIG.configId) || "17",
         total_tokens: tokens
       },
       result_json: finalJob
@@ -4585,17 +4944,26 @@ function getDocTarget(sampleIdx, docType) {
   };
 }
 
-function openDocViewerWithField(fieldKey) {
+function openDocViewerWithField(fieldKey, specificDocType) {
   var sIdx = currentActiveSampleIndex || 1;
-  // JSON check_results에서 해당 필드 키와 연관된 항목 탐색
   var target = null;
-  if (currentCheckResults && currentCheckResults.length > 0) {
+
+  if (specificDocType) {
+    var evDoc = getEvidence(fieldKey, specificDocType);
+    if (evDoc) {
+      target = getEvidenceTarget(sIdx, specificDocType, evDoc, fieldKey);
+    }
+  }
+
+  // JSON check_results에서 해당 필드 키와 연관된 항목 탐색
+  if (!target && currentCheckResults && currentCheckResults.length > 0) {
     for (var i = 0; i < currentCheckResults.length; i++) {
       var cr = currentCheckResults[i];
       if (!cr || !cr.documents) continue;
       if (cr.check_item === fieldKey || cr.check_item === (fieldKey + "_consistency") || cr.check_item.indexOf(fieldKey) >= 0) {
         var docs = Object.keys(cr.documents);
         for (var j = 0; j < docs.length; j++) {
+          if (specificDocType && docs[j] !== specificDocType) continue;
           var dItem = cr.documents[docs[j]];
           if (dItem && dItem.source && dItem.source.page > 0 && Array.isArray(dItem.source.boxes) && dItem.source.boxes.length > 0) {
             target = {
@@ -4614,8 +4982,8 @@ function openDocViewerWithField(fieldKey) {
   if (target && target.page > 0) {
     openDocViewer(sIdx, target.page, target.box, target.label);
   } else {
-    var def = getDocTarget(sIdx, null);
-    openDocViewer(sIdx, def.page, null, toKoreanLabel(fieldKey));
+    var def = getDocTarget(sIdx, specificDocType || null);
+    openDocViewer(sIdx, def.page, null, toKoreanLabel(fieldKey, specificDocType));
   }
 }
 

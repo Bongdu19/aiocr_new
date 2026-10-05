@@ -67,7 +67,7 @@ Content-Type: application/json
 | Parameter  | Type   | Required | Description                                                    |
 |------------|--------|----------|----------------------------------------------------------------|
 | model      | string | Yes      | Agent ID: `agt_hYy33EbPU93zggAb6W9z3G`    |
-| config_id  | string | No       | Config version ID (e.g., `"15"`). Omit to use latest.          |
+| config_id  | string | No       | Config version ID (e.g., `"17"`). Omit to use latest.          |
 | input      | array  | Yes      | Array of input messages with file references (see below)       |
 | include    | array  | No       | `["last"]` for final step only, `["all"]` for all step results |
 
@@ -126,7 +126,7 @@ print(f"Uploaded: {file.id}")
 # Step 2: Create job
 job = client.responses.create(
     model="agt_hYy33EbPU93zggAb6W9z3G",  # Agent ID
-    # config_id="15",
+    # config_id="17",
     include=["last"],                       # "last" = final step only, "all" = every step
     input=[{
         "role": "user",
@@ -171,7 +171,7 @@ JOB_RESPONSE=$(curl -s -X POST https://api.upstage.ai/v2/responses \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"agt_hYy33EbPU93zggAb6W9z3G\",
-  \"config_id\": \"15\",
+  \"config_id\": \"17\",
     \"include\": [\"last\"],
     \"input\": [{
       \"role\": \"user\",
@@ -276,7 +276,7 @@ Job-level failures (`status: "failed"`) typically mean the agent config has an i
 ## Notes
 
 - Agent ID: `agt_hYy33EbPU93zggAb6W9z3G`
-- Config ID: `15`
+- Config ID: `17`
 - The API is OpenAI SDK compatible — use `openai` Python package with `base_url="https://api.upstage.ai/v2"`
 - Files are retained server-side until explicitly deleted
 - Max file size: 500MB. Max pages per document: 1,000. Max video length: 10 minutes

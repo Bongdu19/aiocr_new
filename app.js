@@ -2616,34 +2616,24 @@ function selectChecklistTab(docKey) {
     var pageNum = hasLoc ? item.source.page : (item.page || 0);
 
     var itemClass = "checklist-item" + (pageNum > 0 ? " clickable-checklist-item" : "");
-    var jumpBtn = pageNum > 0
-      ? '<span class="checklist-jump-btn" title="클릭 시 PDF 원본 해당 위치로 이동"><i class="bi bi-box-arrow-in-up-right"></i> p.' + pageNum + ' 원문 보기</span>'
-      : '';
+    var rowTooltip = pageNum > 0 ? "클릭 시 원본 PDF (p." + pageNum + ") 위치로 이동" : "";
 
     var obsVal = cleanText(item.observed_value != null ? item.observed_value : (item.extracted_value != null ? item.extracted_value : (item.value != null ? item.value : "")));
     var detailText = cleanText(item.details || item.desc || "");
     var titleText = cleanText(item.item || item.title || "점검 항목");
 
-    html += '<div class="' + itemClass + '" data-doc="' + escapeHtml(docKey) + '" data-idx="' + i + '">';
-    html += '<div class="checklist-item-main" style="flex: 1; min-width: 0;">';
-    
-    // Title row with jump button and optional detail chip (details는 짧은 판정 라벨 배지로 축소)
-    html += '<div class="checklist-item-title-row">';
-    html += '<div class="checklist-item-title">' + escapeHtml(titleText) + '</div>';
+    html += '<div class="' + itemClass + '" data-doc="' + escapeHtml(docKey) + '" data-idx="' + i + '" title="' + escapeHtml(rowTooltip) + '">';
+    html += '<div class="checklist-item-left">';
+    html += '<span class="checklist-item-title">' + escapeHtml(titleText) + '</span>';
     if (detailText) {
       html += '<span class="checklist-detail-chip" title="판정 세부">' + escapeHtml(detailText) + '</span>';
     }
-    html += jumpBtn;
-    html += '</div>';
-
-    // 🌟 observed_value 중심 강조 표시 (1순위 핵심 개선)
     if (obsVal) {
       html += '<div class="checklist-observed-box">';
       html += '<span class="checklist-observed-label"><i class="bi bi-tag-fill"></i> 추출값:</span>';
       html += '<span class="checklist-observed-val">' + escapeHtml(obsVal) + '</span>';
       html += '</div>';
     }
-
     html += '</div>';
     html += '<div class="checklist-status-wrap"><span class="' + statusBadge + '">' + escapeHtml(koreanStatus(item.status)) + '</span></div>';
     html += '</div>';

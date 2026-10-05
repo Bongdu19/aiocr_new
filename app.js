@@ -1832,34 +1832,6 @@ function renderDocumentKeys(documentKeys, structured, rawSource) {
     html += '</div>';
     html += '<div class="hscode-status-group">' + statusBadgeHtml + '</div>';
     html += '</div>';
-
-    // 문서별 HS Code 상세 나열
-    html += '<div class="hscode-docs-row">';
-    html += '<span class="hscode-docs-title"><i class="bi bi-layers-half"></i> 문서별 기재값:</span>';
-
-    var docDefs = [
-      { key: "commercial_invoice", label: "상업송장" },
-      { key: "certificate_of_origin", label: "원산지증명" },
-      { key: "bill_of_lading", label: "B/L" },
-      { key: "packing_list", label: "패킹" },
-      { key: "marine_cargo_insurance", label: "해상보험" },
-      { key: "other_document", label: "기타(NOTICE)" }
-    ];
-
-    docDefs.forEach(function (dDef) {
-      var dHit = hsInfo.docMap[dDef.key];
-      var val = dHit ? dHit.value : "";
-      var isThisMismatch = isMismatch && val && hsInfo.values.indexOf(val) >= 0;
-      var pillClass = "hscode-doc-pill" + (isThisMismatch ? " mismatch" : "");
-      var clickAttr = val ? ' data-doc="' + escapeHtml(dDef.key) + '" data-key="hs_code" title="클릭하여 ' + dDef.label + ' 원문의 HS Code(' + escapeHtml(val) + ')로 이동"' : '';
-
-      html += '<span class="' + pillClass + '"' + clickAttr + '>';
-      html += '<span>' + dDef.label + ':</span> ';
-      html += '<strong>' + (val ? escapeHtml(val) : '<span style="color:var(--text-subtle);">-</span>') + '</strong>';
-      html += '</span>';
-    });
-
-    html += '</div>'; // end hscode-docs-row
     html += '</div>'; // end hscode-summary-card
   }
 

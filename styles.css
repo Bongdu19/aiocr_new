@@ -1252,83 +1252,11 @@ td.res-cell-neutral {
   letter-spacing: -0.4px;
 }
 
-/* Compact cell values for equal column widths */
-.cell-val {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 2px 5px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  line-height: 1.3;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.cell-val-ok {
-  background: var(--badge-ok-bg);
-  color: var(--badge-ok-text);
-  border: 1px solid var(--badge-ok-border);
-}
-
-.cell-val-crit {
-  background: var(--badge-crit-bg);
-  color: var(--badge-crit-text);
-  border: 1px solid var(--badge-crit-border);
-}
-
-.cell-val-warn {
-  background: var(--badge-warn-bg);
-  color: var(--badge-warn-text);
-  border: 1px solid var(--badge-warn-border);
-}
-
-.cell-val-subtle {
-  background: transparent;
-  color: var(--text-subtle);
-  font-weight: 500;
-  font-style: italic;
-  padding: 2px 4px;
-}
-
-.cell-val-text {
-  background: var(--bg-primary);
-  color: var(--text-main);
-  border: 1px solid var(--border-color);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: -0.2px;
-  font-family: inherit;
-  white-space: normal !important;
-  word-break: break-word !important;
-  overflow-wrap: break-word !important;
-  border-radius: 4px;
-  padding: 1.5px 4px;
-  line-height: 1.2;
-  display: inline-block;
-  max-width: 100%;
-  box-sizing: border-box;
-  text-align: center;
-}
-
-.group-icon {
-  font-size: 16px;
-}
-
-.group-count {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
 /* Table Cell Content Layout & Document Sub-tag */
 .table-cell-content {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -1351,17 +1279,20 @@ td.res-cell-neutral {
   color: #94a3b8;
 }
 
-/* Cell Value Micro Badges */
+/* Compact cell values for equal column widths */
 .cell-val {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 3px;
-  padding: 1.5px 6px;
+  padding: 1.5px 5px;
   border-radius: 4px;
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
   line-height: 1.25;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .cell-val-ok {
@@ -1387,19 +1318,38 @@ td.res-cell-neutral {
   color: var(--text-subtle);
   font-weight: 500;
   font-style: italic;
-  padding: 2px 4px;
+  padding: 1px 4px;
+  font-size: 11px;
 }
 
 .cell-val-text {
   background: var(--bg-primary);
   color: var(--text-main);
   border: 1px solid var(--border-color);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
   font-family: inherit;
-  font-size: 13px;
-  word-break: break-all;
-  white-space: normal;
-  border-radius: 6px;
-  padding: 3px 7px;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  border-radius: 4px;
+  padding: 1.5px 5px;
+  line-height: 1.2;
+  display: inline-block;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.group-icon {
+  font-size: 16px;
+}
+
+.group-count {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .group-header-badges {
@@ -2938,13 +2888,13 @@ details.raw-json-details[open] {
 .hscode-summary-card {
   width: 100%;
   margin-top: 6px;
-  padding: 7px 12px;
+  padding: 4px 10px;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
   box-sizing: border-box;
   transition: all 0.2s ease;
 }
@@ -3004,11 +2954,11 @@ details.raw-json-details[open] {
 
 .hscode-main-val {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text-main);
   letter-spacing: 0.3px;
-  padding: 1.5px 6px;
+  padding: 1px 6px;
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.03);
   border: 1px solid transparent;

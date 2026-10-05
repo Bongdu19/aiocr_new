@@ -556,7 +556,7 @@
 
       return `
         <tr>
-          <td style="color: var(--text-subtle);">${idx + 1}</td>
+          <td style="color: var(--text-subtle); text-align: center; font-variant-numeric: tabular-nums;">${idx + 1}</td>
           <td>
             <div class="file-name-cell">
               <i class="bi bi-file-earmark-pdf-fill"></i>
@@ -566,14 +566,14 @@
               </div>
             </div>
           </td>
-          <td><code style="font-weight:700; color:var(--accent-primary);">${escapeHtml(row.lc_no || '-')}</code></td>
+          <td><span class="lc-number-cell" title="${escapeHtml(row.lc_no || '-')}">${escapeHtml(row.lc_no || '-')}</span></td>
           <td><span class="party-tag" title="${escapeHtml(row.applicant || '')}">${escapeHtml(row.applicant || '-')}</span></td>
           <td><span class="party-tag" title="${escapeHtml(row.beneficiary || '')}">${escapeHtml(row.beneficiary || '-')}</span></td>
           <td>${statusBadge}</td>
           <td>${relBadge}</td>
           <td>${durBadge}</td>
           <td>${jobBadge}</td>
-          <td style="font-size: 12px; color: var(--text-muted);">${dateStr}</td>
+          <td style="font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums;">${dateStr}</td>
           <td>
             <div class="table-action-group">
               <button type="button" class="btn-table-action" onclick="window.dashboardApp.openPdfModal('${escapeJs(row.pdf_url)}', '${escapeJs(row.file_name)}')">

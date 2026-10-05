@@ -98,7 +98,7 @@
   border-color: var(--border-hover);
 }
 
-/* Deduplication Control Banner */
+/* Deduplication Control Banner (Segmented Control) */
 .dedup-control-banner {
   display: flex;
   justify-content: space-between;
@@ -108,8 +108,8 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 12px 20px;
-  margin-bottom: 24px;
+  padding: 10px 18px;
+  margin-bottom: 22px;
 }
 
 .dedup-info {
@@ -125,59 +125,59 @@
   font-size: 16px;
 }
 
-.dedup-toggle-wrap {
-  display: flex;
+.dedup-segment-group {
+  display: inline-flex;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 4px;
+}
+
+.dedup-segment-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-  font-size: 13px;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
   font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.dedup-segment-btn:hover {
   color: var(--text-main);
 }
 
-.toggle-switch {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  background: var(--border-color);
-  border-radius: 20px;
-  transition: background 0.2s;
-}
-
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  background-color: white;
-  border-radius: 50%;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-
-.toggle-switch input:checked + .toggle-slider {
-  transform: translateX(20px);
-}
-
-.toggle-switch.active {
+.dedup-segment-btn.active {
   background: var(--accent-primary);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
 }
 
-/* Top KPI Stat Cards Grid */
+/* Top KPI Stat Cards Grid (5 Streamlined Cards) */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 18px;
-  margin-bottom: 28px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .kpi-card {
@@ -300,37 +300,44 @@
 .party-list-container {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
-.party-row-item {
+/* 6대 서류별 Extract 신뢰도 아이템 */
+.doc-extract-row {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 12px 16px;
   transition: all 0.15s ease;
 }
 
-.party-row-item:hover {
+.doc-extract-row:hover {
   border-color: var(--accent-primary);
   background: var(--bg-secondary);
 }
 
-.party-row-top {
+.doc-extract-top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 8px;
 }
 
-.party-name {
-  font-size: 14px;
+.doc-extract-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--text-main);
-  word-break: break-all;
 }
 
-.party-stats-pill {
+.doc-extract-title i {
+  font-size: 16px;
+}
+
+.doc-score-tag {
   font-size: 12px;
   font-weight: 700;
   padding: 3px 9px;
@@ -338,30 +345,132 @@
   white-space: nowrap;
 }
 
-.pill-match { background: var(--badge-ok-bg); color: var(--badge-ok-text); }
-.pill-mismatch { background: var(--badge-crit-bg); color: var(--badge-crit-text); }
+.tag-score-high {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
 
-.party-progress-bar-wrap {
-  position: relative;
+.tag-score-med {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.tag-score-low {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.doc-progress-wrap {
   width: 100%;
-  height: 8px;
+  height: 7px;
   background: var(--border-color);
   border-radius: 6px;
   overflow: hidden;
+  margin-bottom: 7px;
+}
+
+.doc-progress-bar {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.6s ease;
+}
+
+.bar-high {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.bar-med {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.bar-low {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.doc-extract-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+/* 주요 불일치 빈도 (Top Issues) 아이템 */
+.top-issue-row {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 16px;
+  transition: all 0.15s ease;
+}
+
+.top-issue-row:hover {
+  border-color: #ef4444;
+  background: var(--bg-secondary);
+}
+
+.top-issue-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
 }
 
-.party-progress-fill {
-  height: 100%;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #10b981, #059669);
-  transition: width 0.5s ease;
+.top-issue-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
-.party-row-meta {
+.issue-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.issue-count-tag {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.issue-progress-wrap {
+  width: 100%;
+  height: 7px;
+  background: var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 7px;
+}
+
+.issue-progress-bar {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f87171, #dc2626);
+  transition: width 0.6s ease;
+}
+
+.top-issue-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-subtle);
 }
 

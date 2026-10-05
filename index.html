@@ -49,25 +49,28 @@
       </div>
     </header>
 
-    <!-- Deduplication Control Banner -->
+    <!-- Deduplication Control Banner (Segmented Control) -->
     <div class="dedup-control-banner">
       <div class="dedup-info">
         <i class="bi bi-layers-half"></i>
-        <span id="dedupStatusText">동일 PDF 최신본 기준 집계 활성 (중복 서류 자동 필터링)</span>
+        <span id="dedupStatusText">동일 PDF 파일은 가장 최근 점검 결과 1건만 통계에 반영합니다.</span>
       </div>
-      <div id="dedupToggle" class="dedup-toggle-wrap" title="동일 PDF 파일의 이전 검증 이력 포함 여부를 전환합니다">
-        <span>최신본만 집계</span>
-        <div id="dedupSwitch" class="toggle-switch active">
-          <span class="toggle-slider"></span>
-        </div>
+      <div class="dedup-segment-group">
+        <button type="button" id="btnDedupLatest" class="dedup-segment-btn active" title="동일 PDF 파일의 최신 검증본 1건만 집계">
+          <i class="bi bi-check2"></i> <span>최신 점검본만 집계</span>
+        </button>
+        <button type="button" id="btnDedupAll" class="dedup-segment-btn" title="동일 PDF 파일의 이전 검증 이력까지 모두 포함하여 집계">
+          <i class="bi bi-clock-history"></i> <span>전체 누적 이력 포함</span>
+        </button>
       </div>
     </div>
 
-    <!-- 1️⃣ Top KPI Summary Cards -->
+    <!-- 1️⃣ Streamlined Top KPI Summary Cards (5 Key Metrics) -->
     <section class="kpi-grid">
+      <!-- 1. 총 점검 서류 -->
       <div class="kpi-card">
         <div class="kpi-card-header">
-          <span class="kpi-label">활성 점검 서류</span>
+          <span class="kpi-label">총 점검 서류</span>
           <div class="kpi-icon-box kpi-icon-blue">
             <i class="bi bi-file-earmark-text-fill"></i>
           </div>
@@ -75,69 +78,57 @@
         <div id="kpiTotalDocs" class="kpi-value">-</div>
         <div class="kpi-subtext">
           <i class="bi bi-check-circle-fill" style="color: #2563eb;"></i>
-          <span>최신본 기준 활성 관리 서류</span>
+          <span>심사 관리 대상 서류</span>
         </div>
       </div>
 
+      <!-- 2. 종합 심사 판정 (Pass vs Issue) -->
       <div class="kpi-card">
         <div class="kpi-card-header">
-          <span class="kpi-label">정상 일치율 (Match Rate)</span>
-          <div class="kpi-icon-box kpi-icon-green">
-            <i class="bi bi-pie-chart-fill"></i>
+          <span class="kpi-label">종합 심사 판정</span>
+          <div class="kpi-icon-box kpi-icon-green" id="kpiVerdictIconBox">
+            <i class="bi bi-shield-check"></i>
           </div>
         </div>
-        <div id="kpiMatchRate" class="kpi-value">-</div>
+        <div id="kpiVerdict" class="kpi-value" style="font-size: 20px; line-height: 1.35;">-</div>
         <div class="kpi-subtext">
-          <i class="bi bi-arrow-up-right" style="color: #16a34a;"></i>
-          <span>선적서류 요건 100% 충족 비율</span>
+          <span id="kpiVerdictSubtext">정상 통과 및 검토 필요 현황</span>
         </div>
       </div>
 
+      <!-- 3. AI 적발 불일치 항목 -->
       <div class="kpi-card">
         <div class="kpi-card-header">
-          <span class="kpi-label">불일치 검출 서류</span>
+          <span class="kpi-label">AI 적발 불일치 항목</span>
           <div class="kpi-icon-box kpi-icon-red">
             <i class="bi bi-exclamation-triangle-fill"></i>
           </div>
         </div>
-        <div id="kpiMismatches" class="kpi-value">-</div>
+        <div id="kpiTotalMismatches" class="kpi-value" style="color: #dc2626;">-</div>
         <div class="kpi-subtext">
           <i class="bi bi-shield-slash-fill" style="color: #dc2626;"></i>
-          <span>수정/확인이 필요한 서류 건수</span>
+          <span id="kpiMismatchesSubtext">AI 정밀 점검으로 발견된 이상 항목</span>
         </div>
       </div>
 
-      <div class="kpi-card">
-        <div class="kpi-card-header">
-          <span class="kpi-label">수입자 / 수출자</span>
-          <div class="kpi-icon-box kpi-icon-purple">
-            <i class="bi bi-buildings-fill"></i>
-          </div>
-        </div>
-        <div id="kpiActiveParties" class="kpi-value">-</div>
-        <div class="kpi-subtext">
-          <i class="bi bi-people-fill" style="color: #9333ea;"></i>
-          <span>관리 중인 글로벌 거래 기업수</span>
-        </div>
-      </div>
-
+      <!-- 4. AI-OCR 판독 신뢰도 -->
       <div class="kpi-card">
         <div class="kpi-card-header">
           <span class="kpi-label">AI-OCR 판독 신뢰도</span>
-          <div class="kpi-icon-box kpi-icon-blue">
-            <i class="bi bi-shield-check"></i>
+          <div class="kpi-icon-box kpi-icon-purple">
+            <i class="bi bi-cpu-fill"></i>
           </div>
         </div>
         <div id="kpiOcrConfidence" class="kpi-value">-</div>
         <div class="kpi-subtext">
-          <i class="bi bi-cpu-fill" style="color: #2563eb;"></i>
-          <span id="kpiOcrSubtext">문서 원문 AI 판독 정확성 지수</span>
+          <span id="kpiOcrSubtext">6대 서류 원문 AI 판독 정확성</span>
         </div>
       </div>
 
+      <!-- 5. API 평균 심사 시간 -->
       <div class="kpi-card">
         <div class="kpi-card-header">
-          <span class="kpi-label">API 평균 수행시간</span>
+          <span class="kpi-label">API 평균 심사 시간</span>
           <div class="kpi-icon-box kpi-icon-cyan">
             <i class="bi bi-stopwatch-fill"></i>
           </div>
@@ -150,32 +141,32 @@
       </div>
     </section>
 
-    <!-- 2️⃣ Importer & Exporter Statistics Section (사용자 핵심 요구사항) -->
+    <!-- 2️⃣ Plan A: 6대 무역 서류별 Extract 신뢰도 & 주요 불일치 빈도 분석 -->
     <section class="party-analytics-grid">
-      <!-- Left: 수입자(개설의뢰인) 통계 -->
+      <!-- Left: 6대 무역 서류별 AI Extract 판독 품질 & 신뢰도 -->
       <div class="party-analytics-card">
         <div class="party-card-title">
           <h3>
-            <i class="bi bi-building-check" style="color: #2563eb;"></i>
-            <span>수입자(개설의뢰인)별 검증 현황</span>
+            <i class="bi bi-file-earmark-spreadsheet-fill" style="color: #2563eb;"></i>
+            <span>6대 무역 서류별 AI Extract 판독 품질 & 신뢰도</span>
           </h3>
-          <span id="importerCountBadge" class="badge-count">0개사</span>
+          <span id="docExtractBadge" class="badge-count">6개 서류 모델</span>
         </div>
-        <div id="importerList" class="party-list-container">
+        <div id="docExtractList" class="party-list-container">
           <div class="table-empty-state"><p>로딩 중...</p></div>
         </div>
       </div>
 
-      <!-- Right: 수출자(수익자) 통계 -->
+      <!-- Right: 주요 불일치 & 위반 빈도 분석 (Top Issues) -->
       <div class="party-analytics-card">
         <div class="party-card-title">
           <h3>
-            <i class="bi bi-globe-americas" style="color: #059669;"></i>
-            <span>수출자(수익자)별 공급 서류 현황</span>
+            <i class="bi bi-graph-up-arrow" style="color: #dc2626;"></i>
+            <span>주요 불일치 & 위반 빈도 분석 (Top Issues)</span>
           </h3>
-          <span id="exporterCountBadge" class="badge-count">0개사</span>
+          <span id="topIssueBadge" class="badge-count">위반 유형 분석</span>
         </div>
-        <div id="exporterList" class="party-list-container">
+        <div id="topIssueList" class="party-list-container">
           <div class="table-empty-state"><p>로딩 중...</p></div>
         </div>
       </div>

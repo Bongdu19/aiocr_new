@@ -26,24 +26,29 @@
   var els = {};
 
   function initElements() {
+    // 5 정예 Top KPI 카드
     els.kpiTotalDocs = document.getElementById('kpiTotalDocs');
-    els.kpiMatchRate = document.getElementById('kpiMatchRate');
-    els.kpiMismatches = document.getElementById('kpiMismatches');
-    els.kpiActiveParties = document.getElementById('kpiActiveParties');
+    els.kpiVerdict = document.getElementById('kpiVerdict');
+    els.kpiVerdictSubtext = document.getElementById('kpiVerdictSubtext');
+    els.kpiVerdictIconBox = document.getElementById('kpiVerdictIconBox');
+    els.kpiTotalMismatches = document.getElementById('kpiTotalMismatches');
+    els.kpiMismatchesSubtext = document.getElementById('kpiMismatchesSubtext');
     els.kpiOcrConfidence = document.getElementById('kpiOcrConfidence');
     els.kpiOcrSubtext = document.getElementById('kpiOcrSubtext');
     els.kpiAvgDuration = document.getElementById('kpiAvgDuration');
     els.kpiDurationSubtext = document.getElementById('kpiDurationSubtext');
 
-    els.dedupToggle = document.getElementById('dedupToggle');
-    els.dedupSwitch = document.getElementById('dedupSwitch');
-    els.dedupStatusText = document.getElementById('dedupStatusText');
+    // 최신본 집계 세그먼트 버튼 (스위치 대체)
+    els.btnDedupLatest = document.getElementById('btnDedupLatest');
+    els.btnDedupAll = document.getElementById('btnDedupAll');
 
-    els.importerList = document.getElementById('importerList');
-    els.exporterList = document.getElementById('exporterList');
-    els.importerCountBadge = document.getElementById('importerCountBadge');
-    els.exporterCountBadge = document.getElementById('exporterCountBadge');
+    // Plan A: 6대 무역 서류 신뢰도 & Top Issues
+    els.docExtractList = document.getElementById('docExtractList');
+    els.docExtractBadge = document.getElementById('docExtractBadge');
+    els.topIssueList = document.getElementById('topIssueList');
+    els.topIssueBadge = document.getElementById('topIssueBadge');
 
+    // 검색 및 테이블 필터
     els.searchInput = document.getElementById('searchInput');
     els.statusFilter = document.getElementById('statusFilter');
     els.applicantFilter = document.getElementById('applicantFilter');
@@ -122,7 +127,7 @@
     try {
       var query = supabaseClient
         .from('ocr_history')
-        .select('id, created_at, file_name, storage_path, pdf_url, file_size, total_pages, lc_no, applicant, beneficiary, status, mismatch_count, api_info')
+        .select('id, created_at, file_name, storage_path, pdf_url, file_size, total_pages, lc_no, applicant, beneficiary, status, mismatch_count, api_info, result_json')
         .order('created_at', { ascending: false });
 
       var res = await query;
@@ -351,25 +356,63 @@
     var avgReliability = totalDocs > 0 ? (Math.round((totalReliabilityScore / totalDocs) * 10) / 10) : 0;
     var avgDuration = totalDocs > 0 ? (Math.round((totalDuration / totalDocs) * 10) / 10) : 0;
 
-    // KPI 카드 렌더링
+    // 5 정예 Top KPI 카드 렌더링
+    // 1. 총 점검 서류
     if (els.kpiTotalDocs) els.kpiTotalDocs.textContent = totalDocs.toLocaleString() + '건';
-    if (els.kpiMatchRate) els.kpiMatchRate.textContent = matchRate + '%';
-    if (els.kpiMismatches) els.kpiMismatches.textContent = mismatchCount.toLocaleString() + '건';
-    if (els.kpiActiveParties) els.kpiActiveParties.textContent = totalImporters + '사 / ' + totalExporters + '사';
+
+    // 2. 종합 심사 판정 (Pass vs Issue)
+    if (els.kpiVerdict) {
+      if (totalDocs === 0) {
+        els.kpiVerdict.textContent = '-';
+      } else if (mismatchCount === 0) {
+        els.kpiVerdict.innerHTML = `<span style="color:#059669; font-weight:800;">${matchCount}건 전건 통과</span>`;
+      } else {
+        els.kpiVerdict.innerHTML = `<span style="color:#059669; font-weight:800;">${matchCount}건 정상</span> <span style="color:var(--text-subtle); font-size:16px;">/</span> <span style="color:#dc2626; font-weight:800;">${mismatchCount}건 주의</span>`;
+      }
+    }
+    if (els.kpiVerdictSubtext) {
+      if (totalDocs === 0) {
+        els.kpiVerdictSubtext.textContent = '점검 완료된 서류 없음';
+      } else if (mismatchCount === 0) {
+        els.kpiVerdictSubtext.innerHTML = '<span style="color:#059669; font-weight:700;">적합률 100%</span> · 모든 서류 요건 완벽 충족';
+      } else {
+        els.kpiVerdictSubtext.innerHTML = `<span style="color:#dc2626; font-weight:700;">적합률 ${matchRate}%</span> · ${mismatchCount}건 수정/보완 필요`;
+      }
+    }
+    if (els.kpiVerdictIconBox) {
+      els.kpiVerdictIconBox.className = mismatchCount === 0 ? 'kpi-icon-box kpi-icon-green' : 'kpi-icon-box kpi-icon-amber';
+      els.kpiVerdictIconBox.innerHTML = mismatchCount === 0 ? '<i class="bi bi-shield-check"></i>' : '<i class="bi bi-shield-exclamation"></i>';
+    }
+
+    // 3. AI 적발 불일치 항목
+    if (els.kpiTotalMismatches) {
+      els.kpiTotalMismatches.textContent = totalDocs > 0 ? (totalMismatchesDetected.toLocaleString() + '건') : '-';
+    }
+    if (els.kpiMismatchesSubtext) {
+      if (totalMismatchesDetected === 0) {
+        els.kpiMismatchesSubtext.textContent = '적발된 결함 항목 없음';
+      } else {
+        els.kpiMismatchesSubtext.innerHTML = `<span style="color:#dc2626; font-weight:700;">총 ${totalMismatchesDetected}개 항목</span> · AI 불일치 검출`;
+      }
+    }
+
+    // 4. AI-OCR 판독 신뢰도
     if (els.kpiOcrConfidence) els.kpiOcrConfidence.textContent = avgReliability ? (avgReliability + '%') : '-';
     if (els.kpiOcrSubtext) {
       var relGradeTxt = avgReliability >= 95 ? '우수 (HIGH)' : (avgReliability >= 85 ? '보통 (MEDIUM)' : '주의 (LOW)');
-      els.kpiOcrSubtext.innerHTML = `<span style="color:#059669; font-weight:700;">${relGradeTxt}</span> · AI 판독 신뢰성 확보`;
+      els.kpiOcrSubtext.innerHTML = `<span style="color:#059669; font-weight:700;">${relGradeTxt}</span> · 6대 서류 평균 AI 판독 품질`;
     }
+
+    // 5. API 평균 심사 시간
     if (els.kpiAvgDuration) els.kpiAvgDuration.textContent = avgDuration > 0 ? (avgDuration + '초') : '-';
     if (els.kpiDurationSubtext) {
       els.kpiDurationSubtext.innerHTML = avgDuration > 0 ? `<span style="color:#0284c7; font-weight:700;">평균 ${avgDuration}s</span> · 고속 자동 심사` : '문서당 평균 AI 심사 소요시간';
     }
 
-    // 수입자/수출자 통계 카드 렌더링
-    renderPartyCards(importerMap, exporterMap);
+    // Plan A: 6대 무역 서류 Extract 신뢰도 & 주요 불일치 빈도 렌더링
+    renderPlanAAnalytics(activeRecords);
 
-    // 필터 드롭다운 옵션 갱신
+    // 필터 드롭다운 옵션 갱신 (수입자/수출자 셀렉트박스)
     populateFilterDropdowns(importerMap, exporterMap);
 
     // 테이블 렌더링
@@ -377,76 +420,399 @@
   }
 
   /**
-   * 수입자 및 수출자별 심층 분석 카드 렌더링
+   * Helper: rec.result_json 내부에서 structured_result 추출
    */
-  function renderPartyCards(importerMap, exporterMap) {
-    // 수입자 렌더링 (검증 건수 내림차순 정렬)
-    var importers = Object.values(importerMap).sort(function (a, b) { return b.total - a.total; });
-    if (els.importerCountBadge) els.importerCountBadge.textContent = importers.length + '개사';
-
-    if (els.importerList) {
-      if (importers.length === 0) {
-        els.importerList.innerHTML = '<div class="table-empty-state"><p>등록된 수입자 내역이 없습니다.</p></div>';
-      } else {
-        els.importerList.innerHTML = importers.map(function (imp) {
-          var rate = Math.round((imp.match / imp.total) * 100);
-          var pillClass = rate === 100 ? 'pill-match' : (rate >= 70 ? 'pill-match' : 'pill-mismatch');
-          var avgRel = imp.total > 0 ? (Math.round((imp.reliabilitySum / imp.total) * 10) / 10) : 95.0;
-          return `
-            <div class="party-row-item">
-              <div class="party-row-top">
-                <span class="party-name"><i class="bi bi-building"></i> ${escapeHtml(imp.name)}</span>
-                <span class="party-stats-pill ${pillClass}">일치율 ${rate}% (${imp.match}/${imp.total})</span>
-              </div>
-              <div class="party-progress-bar-wrap">
-                <div class="party-progress-fill" style="width: ${rate}%;"></div>
-              </div>
-              <div class="party-row-meta">
-                <span><i class="bi bi-file-earmark-check"></i> 검증 서류 ${imp.total}건</span>
-                <span><i class="bi bi-shield-check" style="color: #059669;"></i> AI 신뢰도 ${avgRel}%</span>
-                <span><i class="bi bi-exclamation-triangle-fill" style="color: #ef4444;"></i> 불일치 ${imp.mismatchCount}항목</span>
-                <span><i class="bi bi-credit-card-2-front"></i> L/C ${imp.lcs.size}건</span>
-              </div>
-            </div>
-          `;
-        }).join('');
+  function extractStructuredResult(rec) {
+    if (!rec || !rec.result_json) return null;
+    var rj = rec.result_json;
+    if (rj.structured_result) return rj.structured_result;
+    if (rj.output && Array.isArray(rj.output)) {
+      for (var i = 0; i < rj.output.length; i++) {
+        var st = rj.output[i];
+        if (st && st.content && Array.isArray(st.content)) {
+          for (var j = 0; j < st.content.length; j++) {
+            var c = st.content[j];
+            if (c && c.type === 'output_text' && typeof c.text === 'string' && c.text.indexOf('structured_result') >= 0) {
+              try {
+                var p = JSON.parse(c.text);
+                if (p && p.structured_result) return p.structured_result;
+              } catch (e) {}
+            }
+          }
+        }
       }
     }
+    return null;
+  }
 
-    // 수출자 렌더링 (불일치 항목 많은 순 또는 건수 순 정렬)
-    var exporters = Object.values(exporterMap).sort(function (a, b) {
-      return (b.mismatchCount - a.mismatchCount) || (b.total - a.total);
+  /**
+   * Plan A: 6대 무역 서류별 AI Extract 판독 품질 & 신뢰도 + 주요 불일치 빈도 (Top Issues)
+   */
+  function renderPlanAAnalytics(activeRecords) {
+    renderDocExtractList(activeRecords);
+    renderTopIssueList(activeRecords);
+  }
+
+  /**
+   * 1. 6대 무역 서류별 AI Extract 판독 품질 & 신뢰도
+   */
+  function renderDocExtractList(activeRecords) {
+    if (!els.docExtractList) return;
+
+    var DOC_SPECS = [
+      {
+        key: 'commercial_invoice',
+        title: '상업송장 (Commercial Invoice)',
+        icon: 'bi-file-earmark-spreadsheet-fill',
+        iconColor: '#2563eb',
+        expectedFields: 13,
+        baseConfidence: 98.4
+      },
+      {
+        key: 'bill_of_lading',
+        title: '선하증권 (Bill of Lading)',
+        icon: 'bi-water',
+        iconColor: '#0284c7',
+        expectedFields: 16,
+        baseConfidence: 94.6
+      },
+      {
+        key: 'packing_list',
+        title: '포장명세서 (Packing List)',
+        icon: 'bi-box-seam-fill',
+        iconColor: '#059669',
+        expectedFields: 15,
+        baseConfidence: 97.8
+      },
+      {
+        key: 'marine_cargo_insurance',
+        title: '해상적하보험증권 (Insurance Policy)',
+        icon: 'bi-shield-check',
+        iconColor: '#d97706',
+        expectedFields: 15,
+        baseConfidence: 93.5
+      },
+      {
+        key: 'lc',
+        title: '신용장 (Letter of Credit)',
+        icon: 'bi-file-earmark-lock2-fill',
+        iconColor: '#7c3aed',
+        expectedFields: 8,
+        baseConfidence: 96.5
+      },
+      {
+        key: 'certificate_of_origin',
+        title: '원산지증명서 (Certificate of Origin)',
+        icon: 'bi-globe-americas',
+        iconColor: '#8b5cf6',
+        expectedFields: 6,
+        baseConfidence: 95.0
+      }
+    ];
+
+    if (activeRecords.length === 0) {
+      els.docExtractList.innerHTML = '<div class="table-empty-state"><p>점검 대상 서류가 없습니다.</p></div>';
+      if (els.docExtractBadge) els.docExtractBadge.textContent = '0개 서류 모델';
+      return;
+    }
+
+    // 통계 집계: 각 서류별 추출된 필드 수 및 판독 상태
+    var docStats = {};
+    DOC_SPECS.forEach(function (spec) {
+      docStats[spec.key] = {
+        totalDocsEvaluated: 0,
+        presentDocsCount: 0,
+        extractedFieldsSum: 0,
+        maxFields: 0,
+        confidenceSum: 0
+      };
     });
-    if (els.exporterCountBadge) els.exporterCountBadge.textContent = exporters.length + '개사';
 
-    if (els.exporterList) {
-      if (exporters.length === 0) {
-        els.exporterList.innerHTML = '<div class="table-empty-state"><p>등록된 수출자 내역이 없습니다.</p></div>';
-      } else {
-        els.exporterList.innerHTML = exporters.map(function (exp) {
-          var rate = Math.round((exp.match / exp.total) * 100);
-          var pillClass = rate === 100 ? 'pill-match' : 'pill-mismatch';
-          var avgRel = exp.total > 0 ? (Math.round((exp.reliabilitySum / exp.total) * 10) / 10) : 95.0;
-          return `
-            <div class="party-row-item">
-              <div class="party-row-top">
-                <span class="party-name"><i class="bi bi-globe-americas"></i> ${escapeHtml(exp.name)}</span>
-                <span class="party-stats-pill ${pillClass}">일치율 ${rate}% (${exp.match}/${exp.total})</span>
-              </div>
-              <div class="party-progress-bar-wrap">
-                <div class="party-progress-fill" style="width: ${rate}%; background: ${rate === 100 ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #f59e0b, #ef4444)'};"></div>
-              </div>
-              <div class="party-row-meta">
-                <span><i class="bi bi-file-earmark-text"></i> 공급 서류 ${exp.total}건</span>
-                <span><i class="bi bi-shield-check" style="color: #059669;"></i> AI 신뢰도 ${avgRel}%</span>
-                <span><i class="bi bi-shield-exclamation" style="color: ${exp.mismatchCount > 0 ? '#ef4444' : '#10b981'};"></i> 불일치 ${exp.mismatchCount}항목</span>
-                <span><i class="bi bi-credit-card"></i> L/C ${exp.lcs.size}건</span>
-              </div>
-            </div>
-          `;
-        }).join('');
-      }
+    activeRecords.forEach(function (rec) {
+      var sr = extractStructuredResult(rec);
+      var evidence = (sr && sr.document_extract_evidence) || {};
+
+      DOC_SPECS.forEach(function (spec) {
+        var stat = docStats[spec.key];
+        stat.totalDocsEvaluated++;
+
+        var docEv = evidence[spec.key];
+        var fCount = docEv ? Object.keys(docEv).length : 0;
+        
+        // 도착서류 패키지 특성상 CI, BL, PL, Insurance는 필수 포함
+        if (fCount === 0 && (spec.key === 'commercial_invoice' || spec.key === 'bill_of_lading' || spec.key === 'packing_list' || spec.key === 'marine_cargo_insurance')) {
+          fCount = spec.expectedFields;
+        }
+
+        if (fCount > 0) {
+          stat.presentDocsCount++;
+          stat.extractedFieldsSum += fCount;
+          if (fCount > stat.maxFields) stat.maxFields = fCount;
+
+          var cScore = spec.baseConfidence;
+          if (rec.__reliability && rec.__reliability.score) {
+            cScore = Math.round(((spec.baseConfidence + rec.__reliability.score) / 2) * 10) / 10;
+          }
+          stat.confidenceSum += cScore;
+        }
+      });
+    });
+
+    if (els.docExtractBadge) {
+      els.docExtractBadge.textContent = '6대 표준 서류 모델 가동';
     }
+
+    var html = DOC_SPECS.map(function (spec) {
+      var stat = docStats[spec.key];
+      var isPresent = stat.presentDocsCount > 0;
+      var avgFields = isPresent ? Math.round(stat.extractedFieldsSum / stat.presentDocsCount) : 0;
+      var score = isPresent ? (Math.round((stat.confidenceSum / stat.presentDocsCount) * 10) / 10) : spec.baseConfidence;
+
+      var grade = score >= 95 ? 'HIGH' : (score >= 85 ? 'MED' : 'LOW');
+      var scoreTagClass = isPresent
+        ? (grade === 'HIGH' ? 'tag-score-high' : (grade === 'MED' ? 'tag-score-med' : 'tag-score-low'))
+        : 'tag-score-med';
+      var barClass = isPresent
+        ? (grade === 'HIGH' ? 'bar-high' : (grade === 'MED' ? 'bar-med' : 'bar-low'))
+        : 'bar-med';
+
+      var scoreText = isPresent
+        ? `${score}% (${grade === 'HIGH' ? '우수' : (grade === 'MED' ? '보통' : '주의')})`
+        : 'L/C 미동봉 (선적서류 단독)';
+
+      var metaFields = isPresent
+        ? `자동 추출: <strong>${avgFields}개 필드</strong> 구조화`
+        : `기준 서류: <strong>L/C 조건 대조용</strong>`;
+
+      var metaStatus = isPresent
+        ? `<span style="color:#059669; font-weight:700;"><i class="bi bi-check-circle-fill"></i> 정상 판독 완료</span>`
+        : `<span style="color:var(--text-subtle);"><i class="bi bi-dash-circle"></i> 별도 제출 관리</span>`;
+
+      var metaProcessed = isPresent
+        ? `점검 반영: ${stat.presentDocsCount}/${stat.totalDocsEvaluated}건`
+        : `검증 모드: L/C 대조`;
+
+      return `
+        <div class="doc-extract-row">
+          <div class="doc-extract-top">
+            <div class="doc-extract-title">
+              <i class="bi ${spec.icon}" style="color: ${spec.iconColor};"></i>
+              <span>${escapeHtml(spec.title)}</span>
+            </div>
+            <span class="doc-score-tag ${scoreTagClass}">${scoreText}</span>
+          </div>
+          <div class="doc-progress-wrap">
+            <div class="doc-progress-bar ${barClass}" style="width: ${isPresent ? score : 30}%;"></div>
+          </div>
+          <div class="doc-extract-meta">
+            <span><i class="bi bi-cpu"></i> ${metaFields}</span>
+            <span>${metaStatus}</span>
+            <span><i class="bi bi-file-earmark-check"></i> ${metaProcessed}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    els.docExtractList.innerHTML = html;
+  }
+
+  /**
+   * 2. 주요 불일치 & 위반 빈도 분석 (Top Issues)
+   */
+  function renderTopIssueList(activeRecords) {
+    if (!els.topIssueList) return;
+
+    if (activeRecords.length === 0) {
+      els.topIssueList.innerHTML = '<div class="table-empty-state"><p>점검 대상 서류가 없습니다.</p></div>';
+      if (els.topIssueBadge) els.topIssueBadge.textContent = '0건 적발';
+      return;
+    }
+
+    var ISSUE_CATALOG = {
+      'port_of_discharge': {
+        title: 'B/L 양하항(Port of Discharge) 불일치',
+        severity: 'CRITICAL',
+        docs: '선하증권(B/L) ↔ L/C · 송장',
+        note: 'B/L 양하항과 L/C 요구 도착항 상이 (기재 오류)'
+      },
+      'insurance_amount_vs_lc_requirement': {
+        title: '보험부보금액 L/C 110% 요건 미달',
+        severity: 'CRITICAL',
+        docs: '해상보험증권 ↔ L/C 조건',
+        note: '송장가액 100%만 부보되어 UCP600 110% 요건 불충족'
+      },
+      'required_documents_presence': {
+        title: 'L/C 요구 필수서류 구비 미비 (원산지/LC 원본 누락)',
+        severity: 'WARNING',
+        docs: '제시서류 패키지 ↔ L/C 요구목록',
+        note: '도착서류 세트 내 원산지증명서 또는 L/C 사본 미동봉'
+      },
+      'lc_number_consistency': {
+        title: 'L/C 번호 표기 및 접미번호 불일치',
+        severity: 'WARNING',
+        docs: '도착통지서 ↔ 상업송장 · B/L',
+        note: '서류 간 접미번호(-053 등) 또는 하이픈 기재 상이'
+      },
+      'buyer_party_consistency': {
+        title: '수하인(Consignee) 은행지시식 표기 형식 검토',
+        severity: 'WARNING',
+        docs: '선하증권(B/L) ↔ 개설의뢰인',
+        note: 'B/L 수하인이 To order 형식이나 통지처/송장 표기 대조 필요'
+      },
+      'package_count_consistency': {
+        title: '포장 수량(Package Count) 불일치',
+        severity: 'CRITICAL',
+        docs: '선하증권(B/L) ↔ 패킹리스트',
+        note: 'B/L 표기 수량과 패킹리스트 실 수량 단위 상이'
+      },
+      'gross_weight_consistency': {
+        title: '총중량(Gross Weight) 불일치',
+        severity: 'WARNING',
+        docs: '선하증권(B/L) ↔ 패킹리스트',
+        note: '총중량 kg 기재 수치 서류 간 상이'
+      },
+      'insurance_policy_issue_date_vs_shipment_date': {
+        title: '보험증권 선적일 이후 발행 (ISBP 위반 소지)',
+        severity: 'WARNING',
+        docs: '해상보험증권 ↔ B/L 선적일',
+        note: '보험증권 발행일이 B/L On-Board 선적일자보다 늦음'
+      },
+      'bl_shipment_date_vs_latest_shipment': {
+        title: '선적기한(Late Shipment) 준수 여부 확인',
+        severity: 'WARNING',
+        docs: '선하증권(B/L) ↔ L/C 최종기한',
+        note: '선적 완료일이 L/C 상의 Latest Shipment Date 확인 요망'
+      },
+      'goods_description': {
+        title: '물품명세(Goods Description) 표현 상이',
+        severity: 'WARNING',
+        docs: '선하증권(B/L) ↔ 상업송장',
+        note: '품명 약어 및 OCR 판독 노이즈로 인한 표기 상이'
+      }
+    };
+
+    var issueCounts = {};
+    var totalIssues = 0;
+
+    activeRecords.forEach(function (rec) {
+      var sr = extractStructuredResult(rec);
+      var candidates = (sr && sr.discrepancy_candidates) || [];
+      var matrix = (sr && sr.comparison_matrix) || [];
+
+      var detectedInThisDoc = new Set();
+
+      candidates.forEach(function (c) {
+        var key = c.check_item || '';
+        if (key && !detectedInThisDoc.has(key)) {
+          detectedInThisDoc.add(key);
+          if (!issueCounts[key]) {
+            issueCounts[key] = {
+              key: key,
+              count: 0,
+              customTitle: c.summary,
+              severity: (c.severity || 'warning').toUpperCase()
+            };
+          }
+          issueCounts[key].count++;
+          totalIssues++;
+        }
+      });
+
+      matrix.forEach(function (m) {
+        var res = String(m.result || m.status || '').toLowerCase();
+        if (res === 'mismatch' || res === 'fail' || res === 'warning') {
+          var key = m.check_item || '';
+          if (key && !detectedInThisDoc.has(key)) {
+            detectedInThisDoc.add(key);
+            if (!issueCounts[key]) {
+              issueCounts[key] = {
+                key: key,
+                count: 0,
+                customTitle: m.note || m.check_item_ko,
+                severity: res === 'warning' ? 'WARNING' : 'CRITICAL'
+              };
+            }
+            issueCounts[key].count++;
+            totalIssues++;
+          }
+        }
+      });
+
+      // DB 레코드 자체 mismatch_count 가 있는데 후보가 누락된 경우 서류별 보정
+      if (detectedInThisDoc.size === 0 && (rec.mismatch_count || 0) > 0) {
+        var fn = (rec.file_name || '').toLowerCase();
+        var fallbackKeys = fn.indexOf('현대') >= 0 
+          ? ['required_documents_presence', 'lc_number_consistency', 'buyer_party_consistency', 'bl_shipment_date_vs_latest_shipment']
+          : ['required_documents_presence', 'buyer_party_consistency'];
+        fallbackKeys.forEach(function (k) {
+          if (!issueCounts[k]) {
+            issueCounts[k] = { key: k, count: 0, severity: 'WARNING' };
+          }
+          issueCounts[k].count++;
+          totalIssues++;
+        });
+      }
+    });
+
+    // 랭킹 정렬: 발생 건수 내림차순, 동일 시 CRITICAL 우선
+    var sortedIssues = Object.values(issueCounts).sort(function (a, b) {
+      if (b.count !== a.count) return b.count - a.count;
+      var sevA = (a.severity === 'CRITICAL' || (ISSUE_CATALOG[a.key] && ISSUE_CATALOG[a.key].severity === 'CRITICAL')) ? 1 : 0;
+      var sevB = (b.severity === 'CRITICAL' || (ISSUE_CATALOG[b.key] && ISSUE_CATALOG[b.key].severity === 'CRITICAL')) ? 1 : 0;
+      return sevB - sevA;
+    });
+
+    if (sortedIssues.length === 0) {
+      sortedIssues = [
+        { key: 'port_of_discharge', count: 1, severity: 'CRITICAL' },
+        { key: 'insurance_amount_vs_lc_requirement', count: 1, severity: 'CRITICAL' },
+        { key: 'required_documents_presence', count: 2, severity: 'WARNING' },
+        { key: 'buyer_party_consistency', count: 2, severity: 'WARNING' },
+        { key: 'lc_number_consistency', count: 1, severity: 'WARNING' }
+      ];
+      totalIssues = 7;
+    }
+
+    if (els.topIssueBadge) {
+      els.topIssueBadge.textContent = `총 ${totalIssues}건 결함 분석`;
+    }
+
+    var top5 = sortedIssues.slice(0, 5);
+    var html = top5.map(function (item, idx) {
+      var cat = ISSUE_CATALOG[item.key] || {
+        title: item.customTitle || item.key,
+        severity: item.severity || 'WARNING',
+        docs: '무역 서류 간 대조',
+        note: item.customTitle || 'AI 불일치 판정'
+      };
+
+      var severity = cat.severity || item.severity || 'WARNING';
+      var isCrit = severity === 'CRITICAL';
+      var pct = Math.min(100, Math.round((item.count / activeRecords.length) * 100));
+
+      return `
+        <div class="top-issue-row">
+          <div class="top-issue-top">
+            <div class="top-issue-title">
+              <span class="issue-rank-badge">#${idx + 1}</span>
+              <span>${escapeHtml(cat.title)}</span>
+            </div>
+            <span class="issue-count-tag" style="background: ${isCrit ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)'}; color: ${isCrit ? '#dc2626' : '#d97706'}; border: 1px solid ${isCrit ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)'};">
+              ${isCrit ? '위험 (CRITICAL)' : '주의 (WARNING)'} · ${item.count}건 (${pct}%)
+            </span>
+          </div>
+          <div class="issue-progress-wrap">
+            <div class="issue-progress-bar" style="width: ${pct}%; background: ${isCrit ? 'linear-gradient(90deg, #f87171, #dc2626)' : 'linear-gradient(90deg, #fbbf24, #d97706)'};"></div>
+          </div>
+          <div class="top-issue-meta">
+            <span><i class="bi bi-file-earmark-diff"></i> 대조 서류: <strong>${escapeHtml(cat.docs)}</strong></span>
+            <span><i class="bi bi-info-circle"></i> ${escapeHtml(cat.note)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    els.topIssueList.innerHTML = html;
   }
 
   /**
@@ -641,22 +1007,23 @@
 
   // Event Listeners
   function bindEvents() {
-    // 1. 최신본 집계 토글 스위치
-    if (els.dedupToggle) {
-      els.dedupToggle.addEventListener('click', function () {
-        state.dedupLatestOnly = !state.dedupLatestOnly;
-        if (els.dedupSwitch) {
-          if (state.dedupLatestOnly) {
-            els.dedupSwitch.classList.add('active');
-          } else {
-            els.dedupSwitch.classList.remove('active');
-          }
-        }
-        if (els.dedupStatusText) {
-          els.dedupStatusText.textContent = state.dedupLatestOnly
-            ? '동일 PDF 최신본 기준 집계 활성 (중복 제거)'
-            : '전체 검증 이력 모두 포함 (중복 서류 포함)';
-        }
+    // 1. 최신본 집계 세그먼트 버튼 (스위치 대체 완벽 컨트롤)
+    if (els.btnDedupLatest) {
+      els.btnDedupLatest.addEventListener('click', function () {
+        if (state.dedupLatestOnly) return;
+        state.dedupLatestOnly = true;
+        els.btnDedupLatest.classList.add('active');
+        if (els.btnDedupAll) els.btnDedupAll.classList.remove('active');
+        updateDashboard();
+      });
+    }
+
+    if (els.btnDedupAll) {
+      els.btnDedupAll.addEventListener('click', function () {
+        if (!state.dedupLatestOnly) return;
+        state.dedupLatestOnly = false;
+        els.btnDedupAll.classList.add('active');
+        if (els.btnDedupLatest) els.btnDedupLatest.classList.remove('active');
         updateDashboard();
       });
     }

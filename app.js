@@ -3142,32 +3142,115 @@ function calculateOcrReliability(parsed, finalJob) {
 async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, finalJob, configId) {
   if (!supabaseClient) return;
   try {
-    var lcNo = (parsed.document_keys && parsed.document_keys.lc_number) || "-";
-    var applicant = "-";
-    var beneficiary = "-";
+    // 1. Upstage v14/v15 응답 구조 정규화 (instruct_result, structured_result, steps, output 등)
+    var normPayload = (typeof normalizeResultPayload === "function")
+      ? normalizeResultPayload(parsed || finalJob)
+      : (parsed || {});
+    
+    if (typeof enrichComparisonMatrix === "function" && normPayload) {
+      try { enrichComparisonMatrix(normPayload); } catch (e) {}
+    }
+
+    var matrix = (normPayload && Array.isArray(normPayload.comparison_matrix))
+      ? normPayload.comparison_matrix
+      : ((parsed && Array.isArray(parsed.comparison_matrix)) ? parsed.comparison_matrix : []);
+
+    var docKeys = (normPayload && normPayload.document_keys) || (parsed && parsed.document_keys) || {};
+
+    // 2. L/C 번호 추출 (우선순위: docKeys -> comparison_matrix -> 파일명)
+    var lcNo = docKeys.lc_number || docKeys.lc_no || docKeys.lcNumber || "";
+    if (!lcNo || lcNo === "-") {
+      var lcRow = matrix.find(function (x) {
+        var key = String(x.check_item || x.item || "").toLowerCase();
+        var ko = String(x.check_item_ko || x.label || "");
+        return key.indexOf("lc_number") >= 0 || ko.indexOf("l/c") >= 0 || ko.indexOf("신용장") >= 0;
+      });
+      if (lcRow) {
+        lcNo = lcRow.lc || lcRow.commercial_invoice || lcRow.bill_of_lading || lcRow.packing_list || "";
+      }
+    }
+    if (!lcNo || lcNo === "-") {
+      var fMatch = String(file && file.name || "").match(/[A-Z0-9]{12,18}/);
+      if (fMatch) lcNo = fMatch[0];
+    }
+    lcNo = (lcNo && lcNo !== "-") ? String(lcNo).trim() : "-";
+
+    // 3. 당사자(수입자/수출자) 값 추출 헬퍼
+    function getPartyValue(row) {
+      if (!row) return "";
+      var cands = [
+        row.commercial_invoice,
+        row.packing_list,
+        row.bill_of_lading,
+        row.bl,
+        row.lc,
+        row.certificate_of_origin,
+        row.coo,
+        row.insurance,
+        row.extra,
+        row.others,
+        row.other
+      ];
+      for (var i = 0; i < cands.length; i++) {
+        var v = String(cands[i] || "").trim();
+        if (v && v !== "-" && v !== "null" && v !== "undefined") return v;
+      }
+      var keys = Object.keys(row);
+      for (var j = 0; j < keys.length; j++) {
+        var k = keys[j];
+        if (/^(check_item|check_item_ko|label|result|status|category|description|source|item|page|box)$/i.test(k)) continue;
+        var cv = String(row[k] || "").trim();
+        if (cv && cv !== "-" && cv !== "null" && cv !== "undefined") return cv;
+      }
+      return "";
+    }
+
+    // 3-1. 수입자 (개설의뢰인 / 수하인)
+    var applicant = docKeys.applicant || docKeys.applicant_name || "";
+    var buyerRow = matrix.find(function (x) {
+      var key = String(x.check_item || x.item || "").toLowerCase();
+      var ko = String(x.check_item_ko || x.label || "");
+      return key.indexOf("buyer") >= 0 || key.indexOf("applicant") >= 0 ||
+             ko.indexOf("수입자") >= 0 || ko.indexOf("수하인") >= 0 || ko.indexOf("개설의뢰인") >= 0;
+    });
+    if (buyerRow) {
+      var bVal = getPartyValue(buyerRow);
+      if (bVal) applicant = bVal;
+    }
+    applicant = (applicant && applicant !== "-") ? String(applicant).trim() : "-";
+
+    // 3-2. 수출자 (수익자 / 송하인)
+    var beneficiary = docKeys.beneficiary || docKeys.beneficiary_name || "";
+    var sellerRow = matrix.find(function (x) {
+      var key = String(x.check_item || x.item || "").toLowerCase();
+      var ko = String(x.check_item_ko || x.label || "");
+      return key.indexOf("seller") >= 0 || key.indexOf("beneficiary") >= 0 ||
+             ko.indexOf("수출자") >= 0 || ko.indexOf("송하인") >= 0 || ko.indexOf("수익자") >= 0;
+    });
+    if (sellerRow) {
+      var sVal = getPartyValue(sellerRow);
+      if (sVal) beneficiary = sVal;
+    }
+    beneficiary = (beneficiary && beneficiary !== "-") ? String(beneficiary).trim() : "-";
+
+    // 4. 불일치 및 주의(Warning/Review/Mismatch/주의) 정밀 판정
     var mismatchCount = 0;
-
-    if (parsed.comparison_matrix && Array.isArray(parsed.comparison_matrix)) {
-      var buyerRow = parsed.comparison_matrix.find(function (x) {
-        return x.check_item === "buyer_party_consistency" || (x.check_item_ko && x.check_item_ko.indexOf("수입자") >= 0);
-      });
-      if (buyerRow) {
-        applicant = buyerRow.commercial_invoice || buyerRow.packing_list || buyerRow.lc || "-";
+    matrix.forEach(function (r) {
+      var res = String(r.result || r.status || "").toLowerCase().trim();
+      var isMismatch = res === "mismatch" || res === "fail" || res === "warning" || res === "warn" ||
+                       res === "review_required" || res === "unclear" ||
+                       res.indexOf("불일치") >= 0 || res.indexOf("주의") >= 0 || res.indexOf("검토") >= 0 || res.indexOf("오류") >= 0;
+      if (isMismatch) {
+        mismatchCount++;
       }
+    });
 
-      var sellerRow = parsed.comparison_matrix.find(function (x) {
-        return x.check_item === "seller_party_consistency" || (x.check_item_ko && x.check_item_ko.indexOf("수출자") >= 0);
-      });
-      if (sellerRow) {
-        beneficiary = sellerRow.commercial_invoice || sellerRow.bill_of_lading || sellerRow.lc || "-";
-      }
-
-      parsed.comparison_matrix.forEach(function (r) {
-        var res = String(r.result || r.status || "").toLowerCase();
-        if (res === "mismatch" || res === "fail" || res === "review_required" || res === "unclear") {
-          mismatchCount++;
-        }
-      });
+    // 전체 요약 상태가 review_required/on_hold/보류/주의인 경우 최소 1건 이상 보장
+    var overallStatusRaw = String(normPayload.overall_status || normPayload.overall_alert_level || "").toLowerCase();
+    if ((overallStatusRaw === "review_required" || overallStatusRaw === "on_hold" ||
+         overallStatusRaw === "warning" || overallStatusRaw === "warn" ||
+         overallStatusRaw.indexOf("보류") >= 0 || overallStatusRaw.indexOf("주의") >= 0 || overallStatusRaw.indexOf("검토") >= 0) && mismatchCount === 0) {
+      mismatchCount = 1;
     }
 
     var status = mismatchCount === 0 ? "MATCH" : "MISMATCH";

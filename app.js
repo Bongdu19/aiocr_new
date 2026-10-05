@@ -894,6 +894,48 @@ function formatTableCellHtml(val) {
   return '<span class="cell-val cell-val-text">' + escapeHtml(str) + '</span>';
 }
 
+function formatMultiSentenceHtml(text) {
+  if (!text || text === "-") return "-";
+  var cleaned = cleanText(text).trim();
+  if (!cleaned || cleaned === "-") return "-";
+
+  // Check if text has multiple sentences or newlines
+  var rawLines = cleaned.split(/\r?\n+/);
+  var sentences = [];
+
+  rawLines.forEach(function (line) {
+    line = line.trim();
+    if (!line) return;
+    // Split sentences: period followed by space and not immediately followed by digit/lowercase
+    var parts = line.split(/(?<=[가-힣a-zA-Z0-9\)\'\"\]])\.\s+/);
+    parts.forEach(function (p, idx) {
+      p = p.trim();
+      if (!p) return;
+      // Add period back if missing at end of part
+      if (idx < parts.length - 1 && !/[.!?]$/.test(p)) {
+        p += ".";
+      }
+      sentences.push(p);
+    });
+  });
+
+  if (sentences.length <= 1) {
+    return '<div class="sentence-single">' + escapeHtml(sentences[0] || cleaned) + '</div>';
+  }
+
+  var html = '<div class="sentence-list">';
+  sentences.forEach(function (s) {
+    var hasPrefix = /^([0-9]+[\.\)]|[-*•])\s*/.test(s);
+    if (hasPrefix) {
+      html += '<div class="sentence-item sentence-numbered"><span class="sentence-text">' + escapeHtml(s) + '</span></div>';
+    } else {
+      html += '<div class="sentence-item"><span class="sentence-bullet">•</span><span class="sentence-text">' + escapeHtml(s) + '</span></div>';
+    }
+  });
+  html += '</div>';
+  return html;
+}
+
 function badgeClass(result) {
   var v = String(result || "").toLowerCase();
 
@@ -1779,70 +1821,79 @@ function collectAllHsCodes(structured, rawSource, docKeysInput) {
 }
 
 /**
- * v17 document_keys 렌더링 엔진
- * 1) 기본 식별번호 (LC, INV, BL, INS, COO) 칩 표시
- * 2) 🌟 v17 HS Code 종합 카드 (대표 번호 / 문서별 값 / 불일치 배지 분리 표시)
+ * 주요 문서 번호 (Document Keys) 렌더링
+ * LC, INV, BL, INS, COO 및 HS_CODE를 동일한 단일 라인 칩 형태로 통합 표시
  */
 function renderDocumentKeys(documentKeys, structured, rawSource) {
   var html = "";
   var key;
-  var displayKey;
-  var cleanedVal;
 
   if (!documentKeys || typeof documentKeys !== "object") {
     documentKeys = {};
   }
 
-  // 1. 기존 주요 식별 번호 칩 렌더링 (hs_code는 아래 종합 카드에서 더 상세하게 렌더링)
-  for (key in documentKeys) {
-    if (Object.prototype.hasOwnProperty.call(documentKeys, key)) {
-      if (key === "hs_code" || key === "hscode") continue;
-      cleanedVal = cleanText(documentKeys[key]);
-      displayKey = simplifyKeyName(key);
-      html += '<div class="kv-item clickable-key" data-key="' + escapeHtml(key) + '" title="클릭하여 원본 서류의 해당 번호 위치로 이동 및 하이라이트">';
-      html += '<span class="kv-key">' + escapeHtml(displayKey) + ':</span>';
-      html += '<span class="kv-value">' + escapeHtml(cleanedVal || "-") + "</span>";
-      html += "</div>";
+  // Clone document keys map
+  var keysMap = Object.assign({}, documentKeys);
+
+  // Collect HS code information & ensure hs_code exists in keysMap
+  var hsInfo = collectAllHsCodes(structured, rawSource, keysMap);
+  var repCode = hsInfo.repCode || cleanText(keysMap.hs_code || keysMap.hscode || "");
+  if (repCode) {
+    keysMap.hs_code = repCode;
+  }
+
+  // Preferred display order for major document numbers
+  var preferredOrder = [
+    "lc_number", "lc_no",
+    "invoice_number", "invoice_no", "commercial_invoice_number",
+    "bl_number", "bl_no", "bill_of_lading_number",
+    "packing_list_number", "packing_list_no",
+    "policy_certificate_number", "insurance_policy_number", "insurance_number",
+    "certificate_number", "coo_number", "coo_no",
+    "hs_code", "hscode"
+  ];
+
+  var renderedKeys = {};
+
+  function renderKeyPill(k, val) {
+    if (renderedKeys[k]) return;
+    renderedKeys[k] = true;
+    var dKey = simplifyKeyName(k);
+    var cVal = cleanText(val);
+    var isHs = (k === "hs_code" || k === "hscode");
+    var tooltip = isHs
+      ? "클릭하여 원본 서류의 HS Code 위치로 이동 및 하이라이트"
+      : "클릭하여 원본 서류의 해당 번호 위치로 이동 및 하이라이트";
+    html += '<div class="kv-item clickable-key" data-key="' + escapeHtml(isHs ? "hs_code" : k) + '" title="' + escapeHtml(tooltip) + '">';
+    html += '<span class="kv-key">' + escapeHtml(dKey) + ' :</span>';
+    html += '<span class="kv-value">' + escapeHtml(cVal || "-") + '</span>';
+    html += '</div>';
+  }
+
+  // 1. Render in preferred order
+  preferredOrder.forEach(function (k) {
+    if (Object.prototype.hasOwnProperty.call(keysMap, k)) {
+      renderKeyPill(k, keysMap[k]);
+    }
+  });
+
+  // 2. Render any remaining keys
+  for (key in keysMap) {
+    if (Object.prototype.hasOwnProperty.call(keysMap, key)) {
+      if (!renderedKeys[key]) {
+        renderKeyPill(key, keysMap[key]);
+      }
     }
   }
 
-  // 2. 🌟 v17 HS Code 종합 카드 (대표 HS Code / 문서별 HS Code 값 / 불일치 여부 3대 분리 표시)
-  var hsInfo = collectAllHsCodes(structured, rawSource, documentKeys);
-  var repCode = hsInfo.repCode || cleanText(documentKeys.hs_code || documentKeys.hscode || "");
+  els.documentKeys.innerHTML = html || '<div class="empty-cell">주요 문서 번호 정보 없음</div>';
 
-  if (repCode || Object.keys(hsInfo.docMap).length > 0) {
-    var isMismatch = hsInfo.status === "mismatch";
-    var isMatch = hsInfo.status === "match";
-    var statusClass = isMismatch ? "has-mismatch" : (isMatch ? "has-match" : "");
-
-    var statusBadgeHtml = "";
-    if (isMismatch) {
-      statusBadgeHtml = '<span class="badge badge-crit" style="font-size:11.5px; padding:3px 9px;"><i class="bi bi-exclamation-triangle-fill"></i> HS 코드 불일치 (' + hsInfo.values.length + '개 문서 상이)</span>';
-    } else if (isMatch) {
-      statusBadgeHtml = '<span class="badge badge-ok" style="font-size:11.5px; padding:3px 9px;"><i class="bi bi-check-circle-fill"></i> HS 코드 일치</span>';
-    } else {
-      statusBadgeHtml = '<span class="badge badge-neutral" style="font-size:11.5px; padding:3px 9px;"><i class="bi bi-info-circle"></i> 단일 문서 기재</span>';
-    }
-
-    html += '<div class="hscode-summary-card ' + statusClass + '">';
-    html += '<div class="hscode-header-row">';
-    html += '<div class="hscode-main-badge-group">';
-    html += '<span class="hscode-tag-label"><i class="bi bi-upc-scan"></i> HS_CODE (대표)</span>';
-    html += '<span class="hscode-main-val clickable-key" data-key="hs_code" title="클릭하여 원본 서류의 HS Code 위치로 이동">' + escapeHtml(repCode || "-") + '</span>';
-    html += '</div>';
-    html += '<div class="hscode-status-group">' + statusBadgeHtml + '</div>';
-    html += '</div>';
-    html += '</div>'; // end hscode-summary-card
-  }
-
-  els.documentKeys.innerHTML = html || "결과 없음";
-
-  var items = els.documentKeys.querySelectorAll(".clickable-key, .hscode-doc-pill[data-doc]");
+  var items = els.documentKeys.querySelectorAll(".clickable-key");
   items.forEach(function (el) {
     el.addEventListener("click", function () {
       var k = this.getAttribute("data-key");
       var d = this.getAttribute("data-doc");
-      if (k === "hs_code" && d) {
+      if (k === "hs_code" || k === "hscode") {
         openDocViewerWithCheckItem("hs_code", d);
       } else {
         openDocViewerWithField(k, d);
@@ -2780,8 +2831,8 @@ function renderResult(parsed, finalJob) {
     || (structured && structured.human_summary)
     || cleanText(data.one_line_summary)
     || "-";
-  els.oneLineSummary.textContent = summaryText;
-  els.recommendedAction.textContent = cleanText(data.recommended_action) || "-";
+  els.oneLineSummary.innerHTML = formatMultiSentenceHtml(summaryText);
+  els.recommendedAction.innerHTML = formatMultiSentenceHtml(data.recommended_action);
 
   if (finalJob) {
     renderUsage(finalJob);

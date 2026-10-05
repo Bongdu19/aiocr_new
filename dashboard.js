@@ -463,6 +463,7 @@
       {
         key: 'commercial_invoice',
         title: '상업송장 (Commercial Invoice)',
+        shortTitle: '상업송장 (Invoice)',
         icon: 'bi-file-earmark-spreadsheet-fill',
         iconColor: '#2563eb',
         expectedFields: 13,
@@ -471,6 +472,7 @@
       {
         key: 'bill_of_lading',
         title: '선하증권 (Bill of Lading)',
+        shortTitle: '선하증권 (B/L)',
         icon: 'bi-water',
         iconColor: '#0284c7',
         expectedFields: 16,
@@ -479,6 +481,7 @@
       {
         key: 'packing_list',
         title: '포장명세서 (Packing List)',
+        shortTitle: '포장명세서 (P/L)',
         icon: 'bi-box-seam-fill',
         iconColor: '#059669',
         expectedFields: 15,
@@ -487,6 +490,7 @@
       {
         key: 'marine_cargo_insurance',
         title: '해상적하보험증권 (Insurance Policy)',
+        shortTitle: '해상보험증권 (Insurance)',
         icon: 'bi-shield-check',
         iconColor: '#d97706',
         expectedFields: 15,
@@ -495,6 +499,7 @@
       {
         key: 'lc',
         title: '신용장 (Letter of Credit)',
+        shortTitle: '신용장 (L/C)',
         icon: 'bi-file-earmark-lock2-fill',
         iconColor: '#7c3aed',
         expectedFields: 8,
@@ -503,6 +508,7 @@
       {
         key: 'certificate_of_origin',
         title: '원산지증명서 (Certificate of Origin)',
+        shortTitle: '원산지증명서 (C/O)',
         icon: 'bi-globe-americas',
         iconColor: '#8b5cf6',
         expectedFields: 6,
@@ -559,7 +565,7 @@
     });
 
     if (els.docExtractBadge) {
-      els.docExtractBadge.textContent = '6대 표준 서류 모델 가동';
+      els.docExtractBadge.textContent = '6대 표준 모델';
     }
 
     var html = DOC_SPECS.map(function (spec) {
@@ -578,36 +584,26 @@
 
       var scoreText = isPresent
         ? `${score}% (${grade === 'HIGH' ? '우수' : (grade === 'MED' ? '보통' : '주의')})`
-        : 'L/C 미동봉 (선적서류 단독)';
+        : 'L/C 미동봉';
 
-      var metaFields = isPresent
-        ? `자동 추출: <strong>${avgFields}개 필드</strong> 구조화`
-        : `기준 서류: <strong>L/C 조건 대조용</strong>`;
-
-      var metaStatus = isPresent
-        ? `<span style="color:#059669; font-weight:700;"><i class="bi bi-check-circle-fill"></i> 정상 판독 완료</span>`
-        : `<span style="color:var(--text-subtle);"><i class="bi bi-dash-circle"></i> 별도 제출 관리</span>`;
-
-      var metaProcessed = isPresent
-        ? `점검 반영: ${stat.presentDocsCount}/${stat.totalDocsEvaluated}건`
-        : `검증 모드: L/C 대조`;
+      var metaText = isPresent
+        ? `자동 추출 ${avgFields}개 필드 · 정상 완료`
+        : `L/C 기준 대조용 (선적서류 단독)`;
 
       return `
         <div class="doc-extract-row">
-          <div class="doc-extract-top">
-            <div class="doc-extract-title">
-              <i class="bi ${spec.icon}" style="color: ${spec.iconColor};"></i>
-              <span>${escapeHtml(spec.title)}</span>
+          <div class="doc-extract-left">
+            <i class="bi ${spec.icon}" style="color: ${spec.iconColor};"></i>
+            <span class="doc-extract-title">${escapeHtml(spec.shortTitle)}</span>
+          </div>
+          <div class="doc-extract-center">
+            <span class="doc-extract-meta-text">${metaText}</span>
+            <div class="doc-progress-wrap" title="판독 신뢰도: ${score}%">
+              <div class="doc-progress-bar ${barClass}" style="width: ${isPresent ? score : 30}%;"></div>
             </div>
+          </div>
+          <div class="doc-extract-right">
             <span class="doc-score-tag ${scoreTagClass}">${scoreText}</span>
-          </div>
-          <div class="doc-progress-wrap">
-            <div class="doc-progress-bar ${barClass}" style="width: ${isPresent ? score : 30}%;"></div>
-          </div>
-          <div class="doc-extract-meta">
-            <span><i class="bi bi-cpu"></i> ${metaFields}</span>
-            <span>${metaStatus}</span>
-            <span><i class="bi bi-file-earmark-check"></i> ${metaProcessed}</span>
           </div>
         </div>
       `;
@@ -631,63 +627,83 @@
     var ISSUE_CATALOG = {
       'port_of_discharge': {
         title: 'B/L 양하항(Port of Discharge) 불일치',
+        shortTitle: 'B/L 양하항 불일치',
+        shortDocs: 'B/L ↔ L/C',
         severity: 'CRITICAL',
         docs: '선하증권(B/L) ↔ L/C · 송장',
-        note: 'B/L 양하항과 L/C 요구 도착항 상이 (기재 오류)'
+        note: 'B/L 양하항과 L/C 도착항 상이'
       },
       'insurance_amount_vs_lc_requirement': {
         title: '보험부보금액 L/C 110% 요건 미달',
+        shortTitle: '보험부보금액 110% 미달',
+        shortDocs: '보험 ↔ L/C',
         severity: 'CRITICAL',
         docs: '해상보험증권 ↔ L/C 조건',
-        note: '송장가액 100%만 부보되어 UCP600 110% 요건 불충족'
+        note: '송장가액 100%만 부보되어 110% 미달'
       },
       'required_documents_presence': {
         title: 'L/C 요구 필수서류 구비 미비 (원산지/LC 원본 누락)',
+        shortTitle: 'L/C 요구서류 구비 미비',
+        shortDocs: '제시서류 ↔ L/C',
         severity: 'WARNING',
         docs: '제시서류 패키지 ↔ L/C 요구목록',
-        note: '도착서류 세트 내 원산지증명서 또는 L/C 사본 미동봉'
+        note: '원산지증명서 또는 L/C 원본 미동봉'
       },
       'lc_number_consistency': {
         title: 'L/C 번호 표기 및 접미번호 불일치',
+        shortTitle: 'L/C 번호 표기 불일치',
+        shortDocs: '통지서 ↔ B/L',
         severity: 'WARNING',
         docs: '도착통지서 ↔ 상업송장 · B/L',
-        note: '서류 간 접미번호(-053 등) 또는 하이픈 기재 상이'
+        note: '서류 간 접미번호(-053 등) 상이'
       },
       'buyer_party_consistency': {
         title: '수하인(Consignee) 은행지시식 표기 형식 검토',
+        shortTitle: '수하인(Consignee) 표기 검토',
+        shortDocs: 'B/L ↔ 송장',
         severity: 'WARNING',
         docs: '선하증권(B/L) ↔ 개설의뢰인',
-        note: 'B/L 수하인이 To order 형식이나 통지처/송장 표기 대조 필요'
+        note: 'B/L 수하인 To order 형식 대조 필요'
       },
       'package_count_consistency': {
         title: '포장 수량(Package Count) 불일치',
+        shortTitle: '포장 수량(Package) 불일치',
+        shortDocs: 'B/L ↔ P/L',
         severity: 'CRITICAL',
         docs: '선하증권(B/L) ↔ 패킹리스트',
-        note: 'B/L 표기 수량과 패킹리스트 실 수량 단위 상이'
+        note: 'B/L 수량과 패킹리스트 수량 상이'
       },
       'gross_weight_consistency': {
         title: '총중량(Gross Weight) 불일치',
+        shortTitle: '총중량(Weight) 불일치',
+        shortDocs: 'B/L ↔ P/L',
         severity: 'WARNING',
         docs: '선하증권(B/L) ↔ 패킹리스트',
         note: '총중량 kg 기재 수치 서류 간 상이'
       },
       'insurance_policy_issue_date_vs_shipment_date': {
         title: '보험증권 선적일 이후 발행 (ISBP 위반 소지)',
+        shortTitle: '보험증권 선적일 후 발행',
+        shortDocs: '보험 ↔ B/L',
         severity: 'WARNING',
         docs: '해상보험증권 ↔ B/L 선적일',
-        note: '보험증권 발행일이 B/L On-Board 선적일자보다 늦음'
+        note: '보험증권 발행일이 On-Board 선적일자 이후'
       },
       'bl_shipment_date_vs_latest_shipment': {
         title: '선적기한(Late Shipment) 준수 여부 확인',
+        shortTitle: '선적기한 준수 여부 확인',
+        shortDocs: 'B/L ↔ L/C',
         severity: 'WARNING',
         docs: '선하증권(B/L) ↔ L/C 최종기한',
-        note: '선적 완료일이 L/C 상의 Latest Shipment Date 확인 요망'
+        note: '선적 완료일 L/C 최종기한 확인 요망'
       },
       'goods_description': {
         title: '물품명세(Goods Description) 표현 상이',
+        shortTitle: '물품명세(Description) 상이',
+        shortDocs: 'B/L ↔ 송장',
         severity: 'WARNING',
         docs: '선하증권(B/L) ↔ 상업송장',
-        note: '품명 약어 및 OCR 판독 노이즈로 인한 표기 상이'
+        note: '품명 약어 및 표기 상이'
       }
     };
 
@@ -781,6 +797,8 @@
     var html = top5.map(function (item, idx) {
       var cat = ISSUE_CATALOG[item.key] || {
         title: item.customTitle || item.key,
+        shortTitle: item.customTitle || item.key,
+        shortDocs: '서류 대조',
         severity: item.severity || 'WARNING',
         docs: '무역 서류 간 대조',
         note: item.customTitle || 'AI 불일치 판정'
@@ -792,21 +810,20 @@
 
       return `
         <div class="top-issue-row">
-          <div class="top-issue-top">
-            <div class="top-issue-title">
-              <span class="issue-rank-badge">#${idx + 1}</span>
-              <span>${escapeHtml(cat.title)}</span>
+          <div class="top-issue-left">
+            <span class="issue-rank-badge">#${idx + 1}</span>
+            <span class="top-issue-title" title="${escapeHtml(cat.title)}">${escapeHtml(cat.shortTitle || cat.title)}</span>
+          </div>
+          <div class="top-issue-center">
+            <span class="issue-docs-tag" title="대조 서류: ${escapeHtml(cat.docs)}">${escapeHtml(cat.shortDocs || cat.docs)}</span>
+            <div class="issue-progress-wrap" title="적발: ${item.count}건 (${pct}%)">
+              <div class="issue-progress-bar" style="width: ${pct}%; background: ${isCrit ? 'linear-gradient(90deg, #f87171, #dc2626)' : 'linear-gradient(90deg, #fbbf24, #d97706)'};"></div>
             </div>
+          </div>
+          <div class="top-issue-right">
             <span class="issue-count-tag" style="background: ${isCrit ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)'}; color: ${isCrit ? '#dc2626' : '#d97706'}; border: 1px solid ${isCrit ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)'};">
-              ${isCrit ? '위험 (CRITICAL)' : '주의 (WARNING)'} · ${item.count}건 (${pct}%)
+              ${isCrit ? '위험' : '주의'} · ${item.count}건 (${pct}%)
             </span>
-          </div>
-          <div class="issue-progress-wrap">
-            <div class="issue-progress-bar" style="width: ${pct}%; background: ${isCrit ? 'linear-gradient(90deg, #f87171, #dc2626)' : 'linear-gradient(90deg, #fbbf24, #d97706)'};"></div>
-          </div>
-          <div class="top-issue-meta">
-            <span><i class="bi bi-file-earmark-diff"></i> 대조 서류: <strong>${escapeHtml(cat.docs)}</strong></span>
-            <span><i class="bi bi-info-circle"></i> ${escapeHtml(cat.note)}</span>
           </div>
         </div>
       `;

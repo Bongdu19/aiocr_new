@@ -1073,12 +1073,23 @@ table, table.data-table {
 }
 
 th, td {
-  padding: 5px 8px;
+  padding: 4px 6px;
   border-bottom: 1px solid var(--border-color);
   text-align: left;
-  font-size: 12.5px;
+  font-size: 12px;
   vertical-align: middle;
-  line-height: 1.3;
+  line-height: 1.25;
+}
+
+table.data-table tr {
+  height: auto !important;
+}
+
+table.data-table td {
+  padding: 3px 5px;
+  vertical-align: middle;
+  height: auto !important;
+  line-height: 1.2;
 }
 
 tr.group-subheader-row th {
@@ -1194,7 +1205,7 @@ td:first-child {
   font-size: 12px;
   color: var(--text-main);
   border-right: 1.5px solid var(--border-color);
-  padding: 5px 6px;
+  padding: 3px 6px;
   white-space: nowrap !important;
   letter-spacing: -0.4px;
 }
@@ -1204,7 +1215,7 @@ td.res-cell {
   text-align: center !important;
   font-size: 11.5px;
   font-weight: 800 !important;
-  padding: 4px 4px;
+  padding: 3px 4px;
   white-space: nowrap;
   vertical-align: middle;
 }
@@ -1379,12 +1390,22 @@ tr.row-warn {
   background-color: rgba(120, 53, 15, 0.4) !important;
 }
 
-.empty-cell {
+div.empty-cell {
   text-align: center;
   color: var(--text-muted);
-  padding: 28px;
-  font-size: 15px;
+  padding: 24px;
+  font-size: 14px;
   font-weight: 600;
+}
+
+td.empty-cell,
+.data-table td.empty-cell {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 3px 4px !important;
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
 }
 
 /* Badges */

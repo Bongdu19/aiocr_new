@@ -1382,15 +1382,41 @@ function enrichEvidenceWithOcrCoordinates(extractResult, structuredResult) {
   }
 }
 
-function normalizeResultPayload(parsed) {
-  if (!parsed) return {};
-  if (typeof parsed === "string") {
-    try {
-      parsed = JSON.parse(parsed);
-    } catch (e) {
-      return {};
+/**
+ * 🌟 안전하고 완전한 JSON 역직렬화 유틸리티
+ * Upstage Studio Agent API의 이중 인코딩/이스케이프 문자열 및 임의의 응답 형태를 최대 깊이까지 재귀적으로 언래핑
+ */
+function safeUnwrapJson(val) {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "object") return val;
+  var cur = val;
+  var maxDepth = 6;
+  while (typeof cur === "string" && maxDepth-- > 0) {
+    var trimmed = cur.trim();
+    if (!trimmed) break;
+    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+        (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+        (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+      try {
+        cur = JSON.parse(trimmed);
+      } catch (e) {
+        try {
+          cur = JSON.parse(trimmed + "}");
+        } catch (e2) {
+          break;
+        }
+      }
+    } else {
+      break;
     }
   }
+  return cur;
+}
+window.safeUnwrapJson = safeUnwrapJson;
+
+function normalizeResultPayload(parsed) {
+  if (!parsed) return {};
+  parsed = safeUnwrapJson(parsed) || {};
 
   // Upstage Studio Agent include: ["all"] steps 또는 output 복합 응답 대응
   var stepsList = (parsed && Array.isArray(parsed.output)) ? parsed.output : ((parsed && Array.isArray(parsed.steps)) ? parsed.steps : null);
@@ -1404,55 +1430,50 @@ function normalizeResultPayload(parsed) {
       if (!st) continue;
       var mName = String(st.model || st.step_name || st.step_type || "").toLowerCase();
 
-      // (a) instruct step 탐색
-      if (mName.indexOf("instruct") >= 0 || (st.result && st.result.structured_result)) {
+      // (a) instruct step 탐색 (실제 모델 응답 추출)
+      var isInstruct = mName.indexOf("instruct") >= 0 || (st.result && st.result.structured_result);
+      if (isInstruct) {
         if (st.result && st.result.structured_result) {
           instructStructured = st.result.structured_result;
           instructHumanSummary = st.result.human_summary;
         } else if (Array.isArray(st.content)) {
           for (var ci = 0; ci < st.content.length; ci++) {
             var cItem = st.content[ci];
-            if (cItem && cItem.type === "output_text" && typeof cItem.text === "string") {
-              try {
-                var pInst = JSON.parse(cItem.text);
-                if (pInst && pInst.structured_result) {
+            if (!cItem) continue;
+            var textVal = cItem.text || cItem.output_text;
+            if (textVal) {
+              var pInst = safeUnwrapJson(textVal);
+              if (pInst) {
+                if (pInst.structured_result) {
                   instructStructured = pInst.structured_result;
-                  instructHumanSummary = pInst.human_summary;
+                  instructHumanSummary = pInst.human_summary || instructHumanSummary;
+                } else if (pInst.comparison_matrix || pInst.overall_status) {
+                  instructStructured = pInst;
+                  instructHumanSummary = pInst.human_summary || instructHumanSummary;
                 }
-              } catch (e) {
-                try {
-                  var pInst2 = JSON.parse(cItem.text + "}");
-                  if (pInst2 && pInst2.structured_result) {
-                    instructStructured = pInst2.structured_result;
-                    instructHumanSummary = pInst2.human_summary;
-                  }
-                } catch (e2) {}
               }
             }
           }
         }
       }
 
-      // (b) extract step 탐색
-      if (st.result && Array.isArray(st.result.documents)) {
-        extractDocs = extractDocs.concat(st.result.documents);
-      } else if (Array.isArray(st.content)) {
-        for (var cj = 0; cj < st.content.length; cj++) {
-          var cObj = st.content[cj];
-          if (!cObj) continue;
-          if (cObj.type === "output_text" && (cObj.additional_values || mName.indexOf("extract") >= 0)) {
-            var pData = {};
-            if (typeof cObj.text === "string") {
-              try { pData = JSON.parse(cObj.text); } catch (e) {}
-            }
-            var pAv = {};
-            if (cObj.additional_values) {
-              if (typeof cObj.additional_values === "string") {
-                try { pAv = JSON.parse(cObj.additional_values); } catch (e) {}
-              } else if (typeof cObj.additional_values === "object") {
-                pAv = cObj.additional_values;
-              }
-            }
+      // (b) extract step 탐색 (개별 서류 OCR 데이터 및 바운딩 박스)
+      var isExtractStep = (mName.indexOf("extract") >= 0 || mName.indexOf("schema") >= 0 || Boolean(st.result && st.result.documents)) &&
+                          mName.indexOf("instruct") === -1 &&
+                          mName.indexOf("parse") === -1 &&
+                          mName.indexOf("classify") === -1;
+      if (isExtractStep) {
+        if (st.result && Array.isArray(st.result.documents)) {
+          extractDocs = extractDocs.concat(st.result.documents);
+        } else if (Array.isArray(st.content)) {
+          for (var cj = 0; cj < st.content.length; cj++) {
+            var cObj = st.content[cj];
+            if (!cObj) continue;
+            var pData = safeUnwrapJson(cObj.text) || {};
+            if (typeof pData !== "object") pData = {};
+            var pAv = safeUnwrapJson(cObj.additional_values) || {};
+            if (typeof pAv !== "object") pAv = {};
+
             var sType = mName.replace(/^information extract\s*-\s*/i, "").replace(/_schema$/i, "").trim();
             var dType = pData.document_type || pAv.document_type || sType;
             if (dType || sType) {
@@ -1491,24 +1512,16 @@ function normalizeResultPayload(parsed) {
 
   var resolved = null;
   if (parsed && parsed.instruct_result) {
-    resolved = parsed.instruct_result.structured_result || parsed.instruct_result;
+    resolved = safeUnwrapJson(parsed.instruct_result.structured_result || parsed.instruct_result);
   } else if (parsed && parsed.structured_result) {
-    resolved = parsed.structured_result;
+    resolved = safeUnwrapJson(parsed.structured_result);
   } else if (parsed && parsed.content) {
-    if (typeof parsed.content === "string") {
-      try {
-        var inner = JSON.parse(parsed.content);
-        if (inner.instruct_result) {
-          resolved = inner.instruct_result.structured_result || inner.instruct_result;
-        } else {
-          resolved = inner.structured_result || inner;
-        }
-      } catch (e) {}
-    } else if (typeof parsed.content === "object") {
-      if (parsed.content.instruct_result) {
-        resolved = parsed.content.instruct_result.structured_result || parsed.content.instruct_result;
+    var inner = safeUnwrapJson(parsed.content);
+    if (inner) {
+      if (inner.instruct_result) {
+        resolved = inner.instruct_result.structured_result || inner.instruct_result;
       } else {
-        resolved = parsed.content.structured_result || parsed.content;
+        resolved = inner.structured_result || inner;
       }
     }
   }
@@ -1570,9 +1583,12 @@ function enrichComparisonMatrix(structured) {
         }
       });
 
-      // 기타(도착통지서 등) 문서 구비 여부
+      // 기타(도착통지서 등) 문서 구비 여부 동적 판정 (하드코딩 배제)
       if (!row.other_document || !isPresenceStatusWord(row.other_document)) {
-        if (currentActiveSampleIndex === 1 || currentActiveSampleIndex === 2 || (structured.date_checks && structured.date_checks.arrival_notice_date)) {
+        var hasOtherPresence = (dp && (dp.other_document || dp.arrival_notice || dp.other)) ||
+                               (structured.date_checks && structured.date_checks.arrival_notice_date) ||
+                               (currentDynamicDocStructure && currentDynamicDocStructure.docPages && (currentDynamicDocStructure.docPages.other_document || currentDynamicDocStructure.docPages.other));
+        if (hasOtherPresence) {
           row.other_document = "present";
         }
       }
@@ -2050,7 +2066,7 @@ function buildComparisonCellInfo(itemKey, docKey, docTitle, rawVal) {
   var isCorrupted = String(effectiveVal).indexOf("?") >= 0;
   if (hasEvidenceData) {
     if (evidenceDoc && canHighlight(evidenceDoc, docKey, itemKey)) {
-      var targetInfo = getEvidenceTarget(currentActiveSampleIndex || 1, docKey, evidenceDoc, itemKey);
+      var targetInfo = getEvidenceTarget(currentActiveSampleIndex, docKey, evidenceDoc, itemKey);
       var pNum = (targetInfo && targetInfo.page) ? targetInfo.page : 1;
       var tip = isCorrupted
         ? "클릭 시 " + docTitle + " 위치 확인 (p." + pNum + ") [판독 주의]"
@@ -2099,7 +2115,7 @@ function renderComparisonTable(rows) {
 
   var hasOtherDoc = rows.some(function (r) {
     return r && r.other_document !== undefined && r.other_document !== null && r.other_document !== "" && r.other_document !== "-";
-  }) || (currentActiveSampleIndex === 1 || currentActiveSampleIndex === 2);
+  }) || (currentDynamicDocStructure && currentDynamicDocStructure.docPages && !!(currentDynamicDocStructure.docPages.other_document || currentDynamicDocStructure.docPages.other));
 
   var catIcons = {
     "서류 구비 현황": '<i class="bi bi-folder2-open"></i>',
@@ -2438,10 +2454,9 @@ function findEvidenceForCheckItem(docKey, itemTitle, itemDetail) {
     }
   }
 
-  // D. default 서류 기본 페이지 fallback
-  var sIdx = currentActiveSampleIndex || 1;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
-  var defPage = (reg.docPages && reg.docPages[docKey]) ? reg.docPages[docKey] : 1;
+  // D. default 서류 기본 페이지 fallback (동적 파출 우선)
+  var normDoc = typeof normalizeDocType === "function" ? normalizeDocType(docKey) : docKey;
+  var defPage = (currentDynamicDocStructure && currentDynamicDocStructure.docPages && currentDynamicDocStructure.docPages[normDoc]) ? currentDynamicDocStructure.docPages[normDoc] : 1;
   return { page: defPage, boxes: [] };
 }
 
@@ -2678,7 +2693,7 @@ function selectChecklistTab(docKey) {
       var koTitle = toKoreanLabel(rawTitle, docKey);
       var targetLabel = koTitle + (itemObj.details ? ": " + String(itemObj.details).slice(0, 30) : "");
 
-      openDocViewer(currentActiveSampleIndex || 1, targetPage, targetBox, targetLabel);
+      openDocViewer(currentActiveSampleIndex, targetPage, targetBox, targetLabel);
     });
   });
 }
@@ -2761,7 +2776,10 @@ function renderChecklists(documentChecklists) {
 }
 
 function renderResult(parsed, finalJob) {
-  var rawSource = parsed || finalJob;
+  currentRawPayload = finalJob || parsed;
+  if (els.rawJson) els.rawJson.textContent = JSON.stringify(currentRawPayload, null, 2);
+
+  var rawSource = currentRawPayload || parsed || finalJob;
   var data = normalizeResultPayload(rawSource);
   var rows = [];
   var overall = String(data.overall_status || "").toLowerCase();
@@ -2784,8 +2802,10 @@ function renderResult(parsed, finalJob) {
       ? structured.check_item_evidence
       : []);
 
-  currentRawPayload = finalJob || parsed;
-  els.rawJson.textContent = JSON.stringify(currentRawPayload, null, 2);
+  // 🌟 AI-OCR 결과로부터 모든 서류의 시작 페이지 및 세부 섹션을 100% 동적으로 파출 (하드코딩 배제)
+  if (typeof buildDynamicDocStructure === "function") {
+    buildDynamicDocStructure(currentRawPayload, data);
+  }
 
   /* Hide upper duplicated pills, keep only bottom description status badge */
   if (els.overallStatus) els.overallStatus.style.display = "none";
@@ -3193,6 +3213,10 @@ function parseResultText(rawText) {
   if (typeof rawText === "object") {
     return rawText;
   }
+  var unwrapped = safeUnwrapJson(rawText);
+  if (unwrapped && typeof unwrapped === "object") {
+    return unwrapped;
+  }
   try {
     return JSON.parse(rawText);
   } catch (e) {
@@ -3364,6 +3388,129 @@ async function loadRecentDatasetsFromDb() {
   }
 }
 
+/**
+ * 🌟 AI-OCR 결과로부터 모든 서류의 시작 페이지 및 세부 섹션을 100% 동적으로 파출 (하드코딩 배제)
+ */
+var currentDynamicDocStructure = {
+  sections: [],
+  docPages: {},
+  totalPages: 1
+};
+
+function toKoreanDocTitle(normKey, rawName) {
+  if (normKey === "invoice" || normKey === "commercial_invoice") return "상업송장";
+  if (normKey === "bl" || normKey === "bill_of_lading") return "선하증권";
+  if (normKey === "packing_list" || normKey === "packing") return "패킹리스트";
+  if (normKey === "insurance" || normKey === "marine_cargo_insurance") return "해상보험";
+  if (normKey === "coo" || normKey === "certificate_of_origin") return "원산지증명";
+  if (normKey === "lc" || normKey === "letter_of_credit") return "신용장/도착통지";
+  if (normKey === "other_document" || normKey === "other") return "기타서류";
+  return rawName || normKey;
+}
+
+function buildDynamicDocStructure(rawPayload, parsed) {
+  var docPages = {};
+  var sectionList = [];
+  var seenPages = {};
+
+  var sourceObj = rawPayload || parsed;
+  if (!sourceObj) return;
+
+  // 1. Upstage Agent steps / output 순회하여 각 서류별 page_ranges 및 doc_type 동적 파출
+  var steps = (sourceObj && Array.isArray(sourceObj.output))
+    ? sourceObj.output
+    : ((sourceObj && Array.isArray(sourceObj.steps)) ? sourceObj.steps : []);
+
+  steps.forEach(function (st) {
+    if (!st || !Array.isArray(st.content)) return;
+    var mName = String(st.model || st.step_type || "").toLowerCase();
+    var isExtractOrClassify = mName.indexOf("extract") >= 0 || mName.indexOf("classify") >= 0 || mName.indexOf("schema") >= 0;
+    if (!isExtractOrClassify) return;
+
+    st.content.forEach(function (c) {
+      if (!c) return;
+      var av = c.additional_values;
+      if (typeof av === "string") {
+        try { av = JSON.parse(av); } catch (e) {}
+      }
+      if (av && av.page_ranges && Array.isArray(av.page_ranges)) {
+        var schemaName = mName.replace(/^information extract\s*-\s*/i, "").replace(/_schema$/i, "").trim();
+        var docTypeObj = av.document_type;
+        var typeName = (docTypeObj && docTypeObj._value) || schemaName;
+        var normKey = typeof normalizeDocType === "function" ? normalizeDocType(schemaName || typeName) : schemaName;
+
+        av.page_ranges.forEach(function (rng) {
+          if (Array.isArray(rng) && rng.length >= 1) {
+            var startP = rng[0];
+            var endP = rng[1] || startP;
+            if (startP > 0) {
+              if (!docPages[normKey] || startP < docPages[normKey]) {
+                docPages[normKey] = startP;
+              }
+              if (normKey === "invoice") docPages["commercial_invoice"] = startP;
+              if (normKey === "bl") docPages["bill_of_lading"] = startP;
+              if (normKey === "insurance") docPages["marine_cargo_insurance"] = startP;
+              if (normKey === "coo") docPages["certificate_of_origin"] = startP;
+
+              if (!seenPages[startP]) {
+                seenPages[startP] = true;
+                var koTitle = toKoreanDocTitle(normKey, typeName);
+                sectionList.push({
+                  page: startP,
+                  label: koTitle + " (p." + startP + ")",
+                  title: koTitle + (endP > startP ? (" (" + startP + "~" + endP + "p)") : (" (" + startP + "p)"))
+                });
+              }
+            }
+          }
+        });
+      }
+    });
+  });
+
+  // 2. check_results 및 check_item_evidence에서 추가 페이지 정보 보완
+  var crList = (parsed && Array.isArray(parsed.check_results)) ? parsed.check_results : currentCheckResults;
+  if (Array.isArray(crList)) {
+    crList.forEach(function (cr) {
+      if (!cr || !cr.documents) return;
+      Object.keys(cr.documents).forEach(function (dk) {
+        var d = cr.documents[dk];
+        var s = d && normalizeSource(d.source || d.evidence);
+        if (s && s.page > 0) {
+          var nKey = typeof normalizeDocType === "function" ? normalizeDocType(dk) : dk;
+          if (!docPages[nKey] || s.page < docPages[nKey]) {
+            docPages[nKey] = s.page;
+          }
+          if (nKey === "invoice") docPages["commercial_invoice"] = s.page;
+          if (nKey === "bl") docPages["bill_of_lading"] = s.page;
+          if (nKey === "insurance") docPages["marine_cargo_insurance"] = s.page;
+
+          if (!seenPages[s.page]) {
+            seenPages[s.page] = true;
+            var koT = toKoreanDocTitle(nKey, dk);
+            sectionList.push({
+              page: s.page,
+              label: koT + " (p." + s.page + ")",
+              title: koT + " (" + s.page + "p)"
+            });
+          }
+        }
+      });
+    });
+  }
+
+  // 3. 페이지 번호 오름차순 정렬
+  sectionList.sort(function (a, b) {
+    return a.page - b.page;
+  });
+
+  currentDynamicDocStructure = {
+    sections: sectionList,
+    docPages: docPages,
+    totalPages: docViewerState.totalPages || (sectionList.length > 0 ? sectionList[sectionList.length - 1].page : 1)
+  };
+}
+
 async function loadInspectionFromDbById(recordId) {
   if (!supabaseClient) return;
   try {
@@ -3402,13 +3549,35 @@ async function loadInspectionFromDbById(recordId) {
       els.fileInfo.innerHTML = "<strong>[DB 이력] " + escapeHtml(data.file_name) + "</strong> <br><span class=\"meta-text\">(" + escapeHtml(data.storage_path || "") + ")</span>";
     }
 
-    // Configure PDF viewer
-    currentCustomPdfUrl = data.pdf_url;
+    // Configure PDF viewer & Supabase Storage URL
+    var pdfUrl = (data.pdf_url || "").trim();
+    var bucket = (CONFIG && CONFIG.supabase && CONFIG.supabase.storageBucket) || "ocr-pdfs";
+    if (!pdfUrl && data.storage_path && supabaseClient) {
+      try {
+        var pub = supabaseClient.storage.from(bucket).getPublicUrl(data.storage_path);
+        if (pub && pub.data && pub.data.publicUrl) {
+          pdfUrl = pub.data.publicUrl;
+        }
+      } catch (e) {
+        console.warn("Storage getPublicUrl fallback error:", e);
+      }
+    }
+    currentCustomPdfUrl = pdfUrl || null;
     docViewerState.currentDocName = data.file_name;
+
+    // DB 모드: 정적 데모 샘플 바인딩 해제 (모든 페이지와 섹션은 OCR 데이터로부터 100% 동적 파출됨)
+    currentActiveSampleIndex = null;
+    docViewerState.sampleIdx = null;
+
+    // 이전 캐시된 PDF 문서 객체 초기화하여 새 문서 로드 강제
+    if (docViewerState.loadedPdfPath !== currentCustomPdfUrl) {
+      docViewerState.pdfDoc = null;
+    }
+
     selectedFile = null;
     if (els.fileInput) els.fileInput.value = "";
 
-    // Render result
+    // Render result -> buildDynamicDocStructure가 내부에서 자동 호출되어 동적 탭과 docPages 생성
     if (data.result_json) {
       var rawText = extractResultText(data.result_json);
       var parsed = parseResultText(rawText);
@@ -3516,7 +3685,7 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
   try {
     // 1. Upstage v14/v15 응답 구조 정규화 (instruct_result, structured_result, steps, output 등)
     var normPayload = (typeof normalizeResultPayload === "function")
-      ? normalizeResultPayload(parsed || finalJob)
+      ? normalizeResultPayload(finalJob || parsed)
       : (parsed || {});
     
     if (typeof enrichComparisonMatrix === "function" && normPayload) {
@@ -3642,7 +3811,7 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
 
     var insertData = {
       file_name: file.name,
-      storage_path: storagePath || ("pdfs/" + Date.now() + ".pdf"),
+      storage_path: storagePath || "",
       pdf_url: pdfUrl || "",
       file_size: file.size || 0,
       total_pages: (docViewerState && docViewerState.totalPages) || 1,
@@ -4367,7 +4536,7 @@ function initDocViewerEvents() {
 
   if (els.openDocViewerBtn) {
     els.openDocViewerBtn.addEventListener("click", function () {
-      openDocViewer(currentActiveSampleIndex || 1);
+      openDocViewer(currentActiveSampleIndex);
     });
   }
 
@@ -4512,21 +4681,66 @@ function setViewerZoom(newZoom) {
   renderViewerPage(docViewerState.currentPage, docViewerState.targetBox, docViewerState.targetLabel);
 }
 
+function showViewerEmptyPdfNotice(docDisplayName) {
+  var stage = els.docPageStage;
+  if (!stage) return;
+  if (els.viewerDocBadge) {
+    els.viewerDocBadge.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> ' + escapeHtml(docDisplayName || "서류 PDF");
+  }
+  if (els.viewerDocTitle) {
+    els.viewerDocTitle.textContent = "원본 PDF 연결 대기";
+  }
+  if (els.viewerPageIndicator) {
+    els.viewerPageIndicator.textContent = "PDF 미등록";
+  }
+  stage.innerHTML = `
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 480px; padding: 40px 24px; text-align: center; background: var(--bg-primary); border-radius: 8px;">
+      <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(239, 68, 68, 0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+        <i class="bi bi-file-earmark-x" style="font-size: 32px; color: #ef4444;"></i>
+      </div>
+      <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0 0 10px 0;">원본 PDF 파일이 연결되지 않았습니다</h3>
+      <p style="font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); max-width: 480px; margin: 0 0 24px 0;">
+        <strong>${escapeHtml(docDisplayName || "해당 서류")}</strong> 의 분석 데이터는 정상 로드되었으나, 원본 PDF가 스토리지에 등록되어 있지 않습니다.<br>
+        내 PC에서 원본 PDF 파일을 선택하시면 <strong>즉시 싱크를 맞추어 서류 위치 하이라이트</strong>를 열람하실 수 있습니다.
+      </p>
+      <button id="viewerAttachPdfBtn" type="button" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; font-size: 14px; font-weight: 600; border-radius: 10px; cursor: pointer;">
+        <i class="bi bi-file-earmark-plus"></i> 내 PC에서 원본 PDF 파일 연결
+      </button>
+      <input type="file" id="viewerAttachPdfInput" accept="application/pdf" style="display: none;">
+    </div>
+  `;
+
+  var attachBtn = document.getElementById("viewerAttachPdfBtn");
+  var attachInput = document.getElementById("viewerAttachPdfInput");
+  if (attachBtn && attachInput) {
+    attachBtn.addEventListener("click", function () {
+      attachInput.click();
+    });
+    attachInput.addEventListener("change", function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (f) {
+        selectedFile = f;
+        docViewerState.currentDocName = f.name;
+        // 복구: stage 내부 canvas 및 highlightLayer 재생성
+        stage.innerHTML = '<canvas id="pdfCanvas" class="pdf-canvas"></canvas><div id="highlightLayer" class="highlight-overlay-layer"></div>';
+        els.pdfCanvas = document.getElementById("pdfCanvas");
+        els.highlightLayer = document.getElementById("highlightLayer");
+        openDocViewer(null, 1, null, null);
+      }
+    });
+  }
+}
+
 function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
-  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
+  var isDemoSample = (!currentCustomPdfUrl && !selectedFile && sampleIdx && SAMPLE_DOC_REGISTRY[sampleIdx]);
+  var reg = isDemoSample ? SAMPLE_DOC_REGISTRY[sampleIdx] : null;
 
   var pdfSource = null;
-  var docDisplayName = reg.name;
+  var docDisplayName = (docViewerState && docViewerState.currentDocName) || (reg && reg.name) || "문서 뷰어";
   var sourceKey = "";
 
-  // 0) Supabase DB 저장 이력이나 공개 Storage URL이 있는 경우
-  if (currentCustomPdfUrl) {
-    pdfSource = currentCustomPdfUrl;
-    docDisplayName = docViewerState.currentDocName || "저장 서류 PDF";
-    sourceKey = currentCustomPdfUrl;
-  } else if (selectedFile && selectedFile instanceof Blob) {
-    // 1) 사용자가 직접 업로드한 로컬 파일이 있는 경우 (GitHub/서버 업로드 없이 브라우저 메모리 Blob URL로 즉시 로드)
+  // 1) 사용자가 직접 업로드한 로컬 파일이 있는 경우 (GitHub/서버 업로드 없이 브라우저 메모리 Blob URL로 즉시 로드)
+  if (selectedFile && selectedFile instanceof Blob) {
     if (!docViewerState.uploadedBlobUrl || docViewerState.loadedFileRef !== selectedFile) {
       if (docViewerState.uploadedBlobUrl) {
         try { URL.revokeObjectURL(docViewerState.uploadedBlobUrl); } catch (e) {}
@@ -4537,12 +4751,24 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
     pdfSource = docViewerState.uploadedBlobUrl;
     docDisplayName = selectedFile.name;
     sourceKey = "blob:" + selectedFile.name + "_" + selectedFile.size;
-  } else {
-    // 2) 샘플 데이터셋 모드
-    docViewerState.sampleIdx = sIdx;
+  }
+  // 2) Supabase DB 저장 이력이나 공개 Storage URL이 있는 경우
+  else if (currentCustomPdfUrl) {
+    pdfSource = currentCustomPdfUrl;
+    docDisplayName = docViewerState.currentDocName || "DB 저장 서류";
+    sourceKey = currentCustomPdfUrl;
+  }
+  // 3) 사용자가 오프라인 정적 샘플(1~4) 버튼을 명시적으로 클릭한 데모 모드인 경우
+  else if (isDemoSample) {
+    docViewerState.sampleIdx = sampleIdx;
     pdfSource = reg.pdfPath;
     docDisplayName = reg.name;
     sourceKey = reg.pdfPath;
+  }
+  // 4) 그 외: 파일 원본 URL이 없는 경우 (절대로 임의의 샘플1을 로드하지 않음!)
+  else {
+    pdfSource = null;
+    sourceKey = "missing:" + (docViewerState.currentDocName || "none");
   }
 
   docViewerState.currentDocName = docDisplayName;
@@ -4582,8 +4808,22 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
     }
   }
 
-  // Setup Quick Nav Tabs
-  renderQuickNavTabs(sIdx);
+  // Setup Quick Nav Tabs (100% 동적 파출 섹션 연동)
+  renderQuickNavTabs();
+
+  // 원본 PDF 파일이 없는 경우 안내 화면 표시
+  if (!pdfSource) {
+    if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "none";
+    showViewerEmptyPdfNotice(docDisplayName);
+    return;
+  }
+
+  // 정상 파일이 있는 경우 stage 캔버스/레이어 무결성 보장
+  if (!document.getElementById("pdfCanvas") && els.docPageStage) {
+    els.docPageStage.innerHTML = '<canvas id="pdfCanvas" class="pdf-canvas"></canvas><div id="highlightLayer" class="highlight-overlay-layer"></div>';
+    els.pdfCanvas = document.getElementById("pdfCanvas");
+    els.highlightLayer = document.getElementById("highlightLayer");
+  }
 
   var pageToOpen = targetPage || 1;
   docViewerState.targetBox = targetBox || null;
@@ -4602,7 +4842,10 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
       window.pdfjsLib.getDocument(pdfSource).promise.then(function (pdf) {
         docViewerState.pdfDoc = pdf;
         docViewerState.loadedPdfPath = sourceKey;
-        docViewerState.totalPages = pdf.numPages || reg.totalPages || 1;
+        docViewerState.totalPages = pdf.numPages || 1;
+
+        // 동적 섹션 재동기화 (페이지 수가 확인된 후)
+        renderQuickNavTabs();
 
         if (isMobile) {
           fitViewerToWidth();
@@ -4612,7 +4855,7 @@ function openDocViewer(sampleIdx, targetPage, targetBox, targetLabel) {
       }).catch(function (err) {
         console.error("PDF 로드 실패:", err);
         if (els.viewerLoadingSpinner) els.viewerLoadingSpinner.style.display = "none";
-        alert("PDF 서류 로드에 실패했습니다. (" + docDisplayName + ")\n" + err.message);
+        showViewerEmptyPdfNotice(docDisplayName);
       });
     } else {
       alert("PDF.js 라이브러리가 로드되지 않았습니다. 네트워크 연결을 확인하세요.");
@@ -4643,17 +4886,22 @@ function closeDocViewer(fromPopstate) {
   }
 }
 
-function renderQuickNavTabs(sampleIdx) {
+function renderQuickNavTabs() {
   if (!els.docQuickNav) return;
-  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
-  var sections = reg.sections || [];
+  var sections = [];
 
-  // 사용자 업로드 파일인 경우 기본 페이지 섹션 자동 생성
-  if (selectedFile && docViewerState.totalPages > 1 && sections.length === 0) {
-    sections = [];
+  // 1순위: OCR 분석 결과로부터 100% 동적으로 파출된 서류 섹션
+  if (currentDynamicDocStructure && Array.isArray(currentDynamicDocStructure.sections) && currentDynamicDocStructure.sections.length > 0) {
+    sections = currentDynamicDocStructure.sections;
+  }
+  // 2순위: 데모 정적 샘플 모드
+  else if (docViewerState.sampleIdx && SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx]) {
+    sections = SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx].sections || [];
+  }
+  // 3순위: 다중 페이지 문서 기본 페이지 섹션 생성
+  if (sections.length === 0 && docViewerState.totalPages > 1) {
     for (var i = 1; i <= docViewerState.totalPages; i++) {
-      sections.push({ page: i, label: "p." + i, title: selectedFile.name + " (" + i + "p)" });
+      sections.push({ page: i, label: "p." + i, title: (docViewerState.currentDocName || "서류") + " (" + i + "p)" });
     }
   }
 
@@ -4690,23 +4938,23 @@ function renderViewerPage(pageNum, targetBox, targetLabel) {
   if (els.viewerTotalPages) els.viewerTotalPages.textContent = docViewerState.totalPages;
   if (els.viewerPageIndicator) els.viewerPageIndicator.textContent = "Page " + pageNum + " / " + docViewerState.totalPages;
 
-  var reg = SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx] || SAMPLE_DOC_REGISTRY[1];
-
-  var currentSec = null;
-  if (reg.sections) {
-    for (var i = 0; i < reg.sections.length; i++) {
-      if (reg.sections[i].page === pageNum) {
-        currentSec = reg.sections[i];
-        break;
-      }
+  // 동적 섹션에서 현재 페이지에 해당하는 서류 타이틀 탐색
+  var allSections = (currentDynamicDocStructure && currentDynamicDocStructure.sections)
+    || (docViewerState.sampleIdx && SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx] && SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx].sections)
+    || [];
+  var currentSecTitle = "서류 페이지 " + pageNum;
+  for (var i = 0; i < allSections.length; i++) {
+    if (allSections[i].page === pageNum) {
+      currentSecTitle = allSections[i].title;
+      break;
     }
   }
 
   if (els.viewerDocBadge) {
-    els.viewerDocBadge.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> ' + escapeHtml(docViewerState.currentDocName || reg.name);
+    els.viewerDocBadge.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> ' + escapeHtml(docViewerState.currentDocName || "서류 PDF");
   }
   if (els.viewerDocTitle) {
-    els.viewerDocTitle.textContent = currentSec ? currentSec.title : ("서류 페이지 " + pageNum);
+    els.viewerDocTitle.textContent = currentSecTitle;
   }
 
   // 🌟 Quick Nav 활성 탭 표시 동기화
@@ -4770,7 +5018,6 @@ function renderHighlightLayer(pageNum) {
 
   if (!docViewerState.showHighlights) return;
 
-  var reg = SAMPLE_DOC_REGISTRY[docViewerState.sampleIdx] || SAMPLE_DOC_REGISTRY[1];
   var pageBoxes = [];
   var seenCoords = {};
 
@@ -4945,26 +5192,33 @@ function normalizeDocType(docType) {
   return d;
 }
 
-function getDocTarget(sampleIdx, docType) {
-  var sIdx = sampleIdx || currentActiveSampleIndex || 1;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
+function getDocTarget(docType) {
   var normDoc = normalizeDocType(docType);
-  var defaultPage = (normDoc && reg.docPages && reg.docPages[normDoc]) ? reg.docPages[normDoc] : 1;
+  var defPage = 1;
+
+  // 1순위: OCR 분석 결과로부터 동적으로 파출된 해당 서류의 시작 페이지
+  if (currentDynamicDocStructure && currentDynamicDocStructure.docPages && currentDynamicDocStructure.docPages[normDoc]) {
+    defPage = currentDynamicDocStructure.docPages[normDoc];
+  }
+  // 2순위: 데모 정적 샘플 모드
+  else if (currentActiveSampleIndex && SAMPLE_DOC_REGISTRY[currentActiveSampleIndex] && SAMPLE_DOC_REGISTRY[currentActiveSampleIndex].docPages && SAMPLE_DOC_REGISTRY[currentActiveSampleIndex].docPages[normDoc]) {
+    defPage = SAMPLE_DOC_REGISTRY[currentActiveSampleIndex].docPages[normDoc];
+  }
+
   return {
-    page: defaultPage,
+    page: defPage,
     box: null,
     label: ""
   };
 }
 
 function openDocViewerWithField(fieldKey, specificDocType) {
-  var sIdx = currentActiveSampleIndex || 1;
   var target = null;
 
   if (specificDocType) {
     var evDoc = getEvidence(fieldKey, specificDocType);
     if (evDoc) {
-      target = getEvidenceTarget(sIdx, specificDocType, evDoc, fieldKey);
+      target = getEvidenceTarget(null, specificDocType, evDoc, fieldKey);
     }
   }
 
@@ -4993,21 +5247,20 @@ function openDocViewerWithField(fieldKey, specificDocType) {
   }
 
   if (target && target.page > 0) {
-    openDocViewer(sIdx, target.page, target.box, target.label);
+    openDocViewer(null, target.page, target.box, target.label);
   } else {
-    var def = getDocTarget(sIdx, specificDocType || null);
-    openDocViewer(sIdx, def.page, null, toKoreanLabel(fieldKey, specificDocType));
+    var def = getDocTarget(specificDocType || null);
+    openDocViewer(null, def.page, null, toKoreanLabel(fieldKey, specificDocType));
   }
 }
 
 function openDocViewerWithCheckItem(checkItemKey, docType) {
-  var sIdx = currentActiveSampleIndex || 1;
   var evidenceDoc = getEvidence(checkItemKey, docType);
-  var target = getEvidenceTarget(sIdx, docType, evidenceDoc, checkItemKey);
+  var target = getEvidenceTarget(null, docType, evidenceDoc, checkItemKey);
 
   // 1. JSON source BBox를 통한 하이라이트 (100% JSON 파일 기반)
   if (target && target.page > 0) {
-    openDocViewer(sIdx, target.page, target.box, toKoreanLabel(target.label, docType));
+    openDocViewer(null, target.page, target.box, toKoreanLabel(target.label, docType));
     return;
   }
 
@@ -5022,10 +5275,8 @@ function openDocViewerWithCheckItem(checkItemKey, docType) {
 }
 
 function openDocViewerForDoc(docKey) {
-  var sIdx = currentActiveSampleIndex || 1;
-  var reg = SAMPLE_DOC_REGISTRY[sIdx] || SAMPLE_DOC_REGISTRY[1];
-  var page = (reg.docPages && reg.docPages[docKey]) ? reg.docPages[docKey] : 1;
-  openDocViewer(sIdx, page, null, null);
+  var target = getDocTarget(docKey);
+  openDocViewer(null, target.page, null, null);
 }
 
 document.addEventListener("DOMContentLoaded", init);

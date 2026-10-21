@@ -136,42 +136,53 @@
       }
 
       state.allRecords = (res.data || []).map(function (rec) {
-        var fn = (rec.file_name || '').toLowerCase();
-        // 1. 수입자(Applicant) 보정
-        if (!rec.applicant || rec.applicant === '-') {
-          if (fn.indexOf('코오롱') >= 0 || fn.indexOf('kolon') >= 0) {
-            rec.applicant = 'KOLON INDUSTRIES, INC';
-          } else if (fn.indexOf('대한') >= 0 || fn.indexOf('daehan') >= 0 || fn.indexOf('sample3') >= 0) {
-            rec.applicant = 'DAEHAN IMPORT CORP.';
-          } else if (fn.indexOf('현대') >= 0 || fn.indexOf('hyundai') >= 0 || fn.indexOf('rotem') >= 0 || fn.indexOf('sample2') >= 0) {
-            rec.applicant = 'HYUNDAI ROTEM COMPANY';
-          }
-        }
-        // 2. 수출자(Beneficiary) 보정
-        if (!rec.beneficiary || rec.beneficiary === '-') {
-          if (fn.indexOf('코오롱') >= 0 || fn.indexOf('kolon') >= 0 || fn.indexOf('domo') >= 0) {
-            rec.beneficiary = 'DOMO CAPROLEUNA GMBH';
-          } else if (fn.indexOf('shanghai') >= 0 || fn.indexOf('sample3') >= 0) {
-            rec.beneficiary = 'SHANGHAI HUAXIN INTL';
-          } else if (fn.indexOf('mitsubishi') >= 0 || fn.indexOf('sample2') >= 0) {
-            rec.beneficiary = 'MITSUBISHI ELECTRONICS';
-          }
-        }
-        // 3. LC 번호 보정
-        if (!rec.lc_no || rec.lc_no === '-') {
-          if (fn.indexOf('코오롱') >= 0 || fn.indexOf('kolon') >= 0) {
-            rec.lc_no = 'M0201602EU02535';
-          } else if (fn.indexOf('sample3') >= 0) {
-            rec.lc_no = 'M04A1234NU00567';
-          } else if (fn.indexOf('sample2') >= 0) {
-            rec.lc_no = 'M0201410ES04828';
-          }
-        }
-        // 4. 상태 및 불일치 건수 보정 (코오롱 서류는 수입자 주의 항목으로 불일치 판정)
-        if (fn.indexOf('코오롱') >= 0 || fn.indexOf('kolon') >= 0) {
-          if (rec.status === 'MATCH' && (rec.mismatch_count || 0) === 0) {
-            rec.status = 'MISMATCH';
-            rec.mismatch_count = 1;
+        // DB 컬럼에 값이 누락(-)된 경우, result_json(structured_result / comparison_matrix)에서 100% 동적 추출
+        if ((!rec.applicant || rec.applicant === '-' || !rec.beneficiary || rec.beneficiary === '-' || !rec.lc_no || rec.lc_no === '-') && rec.result_json) {
+          var st = extractStructuredResult(rec);
+          if (st) {
+            var dk = st.document_keys || {};
+            if ((!rec.lc_no || rec.lc_no === '-') && dk.lc_number) rec.lc_no = dk.lc_number;
+            if ((!rec.applicant || rec.applicant === '-') && (dk.applicant || dk.applicant_name)) rec.applicant = dk.applicant || dk.applicant_name;
+            if ((!rec.beneficiary || rec.beneficiary === '-') && (dk.beneficiary || dk.beneficiary_name)) rec.beneficiary = dk.beneficiary || dk.beneficiary_name;
+
+            var matrix = st.comparison_matrix || [];
+            if (Array.isArray(matrix)) {
+              if (!rec.applicant || rec.applicant === '-') {
+                var bRow = matrix.find(function (x) {
+                  var k = String(x.check_item || x.item || '').toLowerCase();
+                  var ko = String(x.check_item_ko || x.label || '');
+                  return k.indexOf('buyer') >= 0 || k.indexOf('applicant') >= 0 || ko.indexOf('수입자') >= 0 || ko.indexOf('수하인') >= 0 || ko.indexOf('개설의뢰인') >= 0;
+                });
+                if (bRow) {
+                  var bVal = bRow.commercial_invoice || bRow.packing_list || bRow.bill_of_lading || bRow.bl || bRow.lc;
+                  if (bVal && bVal !== '-') rec.applicant = bVal;
+                }
+              }
+
+              if (!rec.beneficiary || rec.beneficiary === '-') {
+                var sRow = matrix.find(function (x) {
+                  var k = String(x.check_item || x.item || '').toLowerCase();
+                  var ko = String(x.check_item_ko || x.label || '');
+                  return k.indexOf('seller') >= 0 || k.indexOf('beneficiary') >= 0 || ko.indexOf('수출자') >= 0 || ko.indexOf('송하인') >= 0 || ko.indexOf('수익자') >= 0;
+                });
+                if (sRow) {
+                  var sVal = sRow.commercial_invoice || sRow.packing_list || sRow.bill_of_lading || sRow.bl || sRow.lc;
+                  if (sVal && sVal !== '-') rec.beneficiary = sVal;
+                }
+              }
+
+              if (!rec.lc_no || rec.lc_no === '-') {
+                var lcRow = matrix.find(function (x) {
+                  var k = String(x.check_item || x.item || '').toLowerCase();
+                  var ko = String(x.check_item_ko || x.label || '');
+                  return k.indexOf('lc_number') >= 0 || ko.indexOf('l/c') >= 0 || ko.indexOf('신용장') >= 0;
+                });
+                if (lcRow) {
+                  var lVal = lcRow.lc || lcRow.commercial_invoice || lcRow.bill_of_lading || lcRow.packing_list;
+                  if (lVal && lVal !== '-') rec.lc_no = lVal;
+                }
+              }
+            }
           }
         }
         return rec;
@@ -420,23 +431,55 @@
   }
 
   /**
-   * Helper: rec.result_json 내부에서 structured_result 추출
+   * Helper: safeUnwrapJson & rec.result_json 내부에서 structured_result 추출
    */
+  function safeUnwrapJson(val) {
+    if (val === null || val === undefined) return null;
+    if (typeof val === 'object') return val;
+    var cur = val;
+    var maxDepth = 6;
+    while (typeof cur === 'string' && maxDepth-- > 0) {
+      var trimmed = cur.trim();
+      if (!trimmed) break;
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+          (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+        try {
+          cur = JSON.parse(trimmed);
+        } catch (e) {
+          try { cur = JSON.parse(trimmed + '}'); } catch (e2) { break; }
+        }
+      } else {
+        break;
+      }
+    }
+    return cur;
+  }
+
   function extractStructuredResult(rec) {
     if (!rec || !rec.result_json) return null;
-    var rj = rec.result_json;
+    var rj = safeUnwrapJson(rec.result_json);
+    if (!rj) return null;
     if (rj.structured_result) return rj.structured_result;
-    if (rj.output && Array.isArray(rj.output)) {
-      for (var i = 0; i < rj.output.length; i++) {
-        var st = rj.output[i];
-        if (st && st.content && Array.isArray(st.content)) {
+    if (rj.comparison_matrix) return rj;
+
+    var stepsList = (rj && Array.isArray(rj.output)) ? rj.output : ((rj && Array.isArray(rj.steps)) ? rj.steps : null);
+    if (stepsList && stepsList.length > 0) {
+      for (var i = stepsList.length - 1; i >= 0; i--) {
+        var st = stepsList[i];
+        if (!st) continue;
+        if (st.result && st.result.structured_result) return st.result.structured_result;
+        if (Array.isArray(st.content)) {
           for (var j = 0; j < st.content.length; j++) {
             var c = st.content[j];
-            if (c && c.type === 'output_text' && typeof c.text === 'string' && c.text.indexOf('structured_result') >= 0) {
-              try {
-                var p = JSON.parse(c.text);
-                if (p && p.structured_result) return p.structured_result;
-              } catch (e) {}
+            if (!c) continue;
+            var textVal = c.text || c.output_text;
+            if (textVal) {
+              var p = safeUnwrapJson(textVal);
+              if (p) {
+                if (p.structured_result) return p.structured_result;
+                if (p.comparison_matrix) return p;
+              }
             }
           }
         }

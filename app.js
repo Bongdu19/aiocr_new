@@ -869,24 +869,39 @@ function formatTableCellHtml(val) {
   var str = cleanText(val);
   var lower = str.toLowerCase().trim();
 
-  if (lower === "present" || lower === "구비됨") {
-    return '<span class="cell-val cell-val-ok"><i class="bi bi-check-circle-fill"></i> 구비됨</span>';
+  // 1. 부정어/결손 상태 (없음, 미제공, 미구비, 미제출, 누락 등 ➔ Warning 주황색 / 불일치 ➔ 빨간색)
+  var isMissing = lower === "missing" || lower === "mismatch" ||
+                  lower.indexOf("없음") >= 0 || lower.indexOf("미제공") >= 0 || lower.indexOf("미구비") >= 0 ||
+                  lower.indexOf("미제출") >= 0 || lower.indexOf("미보유") >= 0 || lower.indexOf("누락") >= 0 ||
+                  lower.indexOf("불일치") >= 0 || lower.indexOf("미충족") >= 0;
+
+  if (isMissing) {
+    if (lower.indexOf("불일치") >= 0 || lower === "mismatch" || lower === "fail" || lower.indexOf("오류") >= 0) {
+      return '<span class="cell-val cell-val-crit"><i class="bi bi-x-octagon-fill"></i> ' + escapeHtml(str) + '</span>';
+    }
+    // 사용자 핵심 요구사항: '없음'이면 주의해야 하니 warning 색상 적용
+    return '<span class="cell-val cell-val-warn"><i class="bi bi-exclamation-triangle-fill"></i> ' + escapeHtml(str) + '</span>';
   }
-  if (lower === "match" || lower === "일치") {
-    return '<span class="cell-val cell-val-ok"><i class="bi bi-check-lg"></i> 일치</span>';
+
+  // 2. 긍정어/존재 상태 (있음, 구비됨, 제공, 일치, 제출됨, 보유 ➔ OK 초록색)
+  var isPresent = lower === "present" || lower === "match" ||
+                  lower.indexOf("있음") >= 0 || lower.indexOf("구비") >= 0 || lower.indexOf("제공") >= 0 ||
+                  lower.indexOf("제출됨") >= 0 || lower.indexOf("보유") >= 0 || lower.indexOf("일치") >= 0 || lower.indexOf("충족") >= 0;
+
+  if (isPresent) {
+    return '<span class="cell-val cell-val-ok"><i class="bi bi-check-circle-fill"></i> ' + escapeHtml(str) + '</span>';
   }
-  if (lower === "missing" || lower === "미제출") {
-    return '<span class="cell-val cell-val-crit"><i class="bi bi-x-circle-fill"></i> 미제출</span>';
+
+  // 3. 확인 필요 / 검토 필요 (Warning 주황색)
+  if (lower === "unclear" || lower.indexOf("확인") >= 0 || lower.indexOf("검토") >= 0 || lower.indexOf("주의") >= 0) {
+    return '<span class="cell-val cell-val-warn"><i class="bi bi-question-circle-fill"></i> ' + escapeHtml(str) + '</span>';
   }
-  if (lower === "mismatch" || lower === "불일치") {
-    return '<span class="cell-val cell-val-crit"><i class="bi bi-exclamation-octagon-fill"></i> 불일치</span>';
-  }
-  if (lower === "unclear" || lower === "확인 필요" || lower === "확인필요") {
-    return '<span class="cell-val cell-val-warn"><i class="bi bi-question-circle-fill"></i> 확인필요</span>';
-  }
-  if (lower === "not_available" || lower === "n/a" || lower === "미해당") {
+
+  // 4. 미해당 / N/A (중립 회색)
+  if (lower === "not_available" || lower === "n/a" || lower.indexOf("미해당") >= 0) {
     return '<span class="cell-val cell-val-subtle">미해당</span>';
   }
+
   if (str.indexOf("?") >= 0) {
     return '<span class="cell-val cell-val-warn" title="OCR 판독 불명확"><i class="bi bi-question-diamond"></i> ' + escapeHtml(str) + '</span>';
   }
@@ -2665,18 +2680,53 @@ function selectChecklistTab(docKey) {
     var hasLoc = item.source && item.source.page > 0;
     var pageNum = hasLoc ? item.source.page : (item.page || 0);
 
-    var itemClass = "checklist-item" + (pageNum > 0 ? " clickable-checklist-item" : "");
-    var rowTooltip = pageNum > 0 ? "클릭 시 원본 PDF (p." + pageNum + ") 위치로 이동" : "";
-
     var obsVal = cleanText(item.observed_value != null ? item.observed_value : (item.extracted_value != null ? item.extracted_value : (item.value != null ? item.value : "")));
     var detailText = cleanText(item.details || item.desc || "");
     var titleText = cleanText(item.item || item.title || "점검 항목");
+
+    // 상태 및 상세 내용 기반 위험도 판정 (신경써서 봐야 할 항목 색상 분기)
+    var stLower = String(item.status || "").toLowerCase();
+    var dtLower = String(detailText).toLowerCase();
+
+    var isCrit = stLower === "fail" || stLower === "mismatch" || stLower === "critical" ||
+                 dtLower.indexOf("불일치") >= 0 || dtLower.indexOf("위반") >= 0 || dtLower.indexOf("오류") >= 0 || dtLower.indexOf("기한 초과") >= 0;
+
+    var isWarn = !isCrit && (stLower === "warning" || stLower === "warn" || stLower === "unclear" || stLower === "review_required" || stLower === "missing" ||
+                 dtLower.indexOf("확인 필요") >= 0 || dtLower.indexOf("확인필요") >= 0 || dtLower.indexOf("추가 확인") >= 0 ||
+                 dtLower.indexOf("검토") >= 0 || dtLower.indexOf("주의") >= 0 || dtLower.indexOf("미흡") >= 0 ||
+                 dtLower.indexOf("누락") >= 0 || dtLower.indexOf("의심") >= 0 || dtLower.indexOf("미동봉") >= 0 ||
+                 dtLower.indexOf("미기재") >= 0 || dtLower.indexOf("미제출") >= 0 || dtLower.indexOf("없음") >= 0);
+
+    var isOk = !isCrit && !isWarn && (stLower === "pass" || stLower === "ok" || stLower === "match" ||
+               dtLower.indexOf("일치") >= 0 || dtLower.indexOf("확인") >= 0 || dtLower.indexOf("선적") >= 0 ||
+               dtLower.indexOf("적합") >= 0 || dtLower.indexOf("구비") >= 0 || dtLower.indexOf("정상") >= 0);
+
+    var chipClass = "checklist-detail-chip";
+    var chipIcon = "";
+    var stateClass = "";
+
+    if (isCrit) {
+      chipClass += " checklist-detail-chip-crit";
+      chipIcon = '<i class="bi bi-x-circle-fill"></i> ';
+      stateClass = " item-state-crit";
+    } else if (isWarn) {
+      chipClass += " checklist-detail-chip-warn";
+      chipIcon = '<i class="bi bi-exclamation-triangle-fill"></i> ';
+      stateClass = " item-state-warn";
+    } else if (isOk) {
+      chipClass += " checklist-detail-chip-ok";
+      chipIcon = '<i class="bi bi-check-circle-fill"></i> ';
+      stateClass = " item-state-ok";
+    }
+
+    var itemClass = "checklist-item" + stateClass + (pageNum > 0 ? " clickable-checklist-item" : "");
+    var rowTooltip = pageNum > 0 ? "클릭 시 원본 PDF (p." + pageNum + ") 위치로 이동" : "";
 
     html += '<div class="' + itemClass + '" data-doc="' + escapeHtml(docKey) + '" data-idx="' + i + '" title="' + escapeHtml(rowTooltip) + '">';
     html += '<div class="checklist-item-left">';
     html += '<span class="checklist-item-title">' + escapeHtml(titleText) + '</span>';
     if (detailText) {
-      html += '<span class="checklist-detail-chip" title="판정 세부">' + escapeHtml(detailText) + '</span>';
+      html += '<span class="' + chipClass + '" title="판정 세부">' + chipIcon + escapeHtml(detailText) + '</span>';
     }
     if (obsVal) {
       html += '<div class="checklist-observed-box">';

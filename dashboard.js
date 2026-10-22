@@ -976,7 +976,7 @@
       var durBadge = `<span class="badge-duration" title="API 처리 소요시간: ${dur}초"><i class="bi bi-clock-history"></i> ${dur}s</span>`;
 
       var jId = getJobId(row);
-      var shortJob = jId ? (jId.length > 14 ? (jId.slice(0, 11) + '...') : jId) : '-';
+      var shortJob = jId ? (jId.length > 12 ? (jId.slice(0, 10) + '..') : jId) : '-';
       var jobBadge = jId 
         ? `<span class="badge-job-id" onclick="window.dashboardApp.copyJobId('${escapeJs(jId)}')" title="클릭 시 Job ID 복사 (${escapeHtml(jId)})"><i class="bi bi-cpu"></i> ${escapeHtml(shortJob)}</span>`
         : `<span style="color:var(--text-subtle); font-size:11px;">-</span>`;
@@ -992,7 +992,7 @@
               <i class="bi bi-file-earmark-pdf-fill"></i>
               <div class="file-name-info">
                 <div class="file-name-text" title="${escapeHtml(row.file_name || '이름 없음')}">${escapeHtml(row.file_name || '이름 없음')}</div>
-                <div style="font-size: 11px; color: var(--text-subtle);">${sizeKb} · ${row.total_pages || 1}p</div>
+                <div style="font-size: 10px; color: var(--text-subtle); line-height: 1.1;">${sizeKb} · ${row.total_pages || 1}p</div>
               </div>
             </div>
           </td>
@@ -1003,8 +1003,8 @@
           <td>${relBadge}</td>
           <td>${durBadge}</td>
           <td>${jobBadge}</td>
-          <td style="font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums;">${dateStr}</td>
-          <td>
+          <td style="color: var(--text-muted); font-variant-numeric: tabular-nums;">${dateStr}</td>
+          <td style="text-align: center;">
             <div class="table-action-group">
               <button type="button" class="btn-table-action" onclick="window.dashboardApp.openPdfModal('${escapeJs(row.pdf_url)}', '${escapeJs(row.file_name)}')">
                 <i class="bi bi-file-pdf"></i> PDF
@@ -1033,7 +1033,7 @@
       var day = String(d.getDate()).padStart(2, '0');
       var hour = String(d.getHours()).padStart(2, '0');
       var min = String(d.getMinutes()).padStart(2, '0');
-      return `${year}-${month}-${day} ${hour}:${min}`;
+      return `<div style="line-height:1.2; font-size:11px;">${year}-${month}-${day}<br><span style="font-size:10px; color:var(--text-subtle);">${hour}:${min}</span></div>`;
     } catch (e) {
       return isoStr;
     }

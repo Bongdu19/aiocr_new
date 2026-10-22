@@ -3577,11 +3577,14 @@ async function loadInspectionFromDbById(recordId) {
     var banner = document.getElementById("supabaseBanner");
     var bannerText = document.getElementById("supabaseBannerText");
     if (banner && bannerText) {
-      banner.style.display = "flex";
-      var isMatch = String(data.status || "").toUpperCase() === "MATCH";
+      var stUpper = String(data.status || "").toUpperCase();
+      var isMatch = stUpper === "MATCH";
+      var isWarning = stUpper === "WARNING" || stUpper === "REVIEW" || stUpper === "WARN";
       var badgeHtml = isMatch
         ? '<span style="color:#10b981; font-weight:700;"><i class="bi bi-check-circle-fill"></i> 정상 일치 (MATCH)</span>'
-        : '<span style="color:#ef4444; font-weight:700;"><i class="bi bi-exclamation-triangle-fill"></i> 불일치 (' + (data.mismatch_count || 1) + '건)</span>';
+        : (isWarning
+            ? '<span style="color:#f59e0b; font-weight:700;"><i class="bi bi-info-circle-fill"></i> 검토 필요 / 주의' + ((data.api_info && data.api_info.warning_count) ? ' (' + data.api_info.warning_count + '건)' : '') + '</span>'
+            : '<span style="color:#ef4444; font-weight:700;"><i class="bi bi-exclamation-triangle-fill"></i> 불일치 (' + (data.mismatch_count || 1) + '건)</span>');
       bannerText.innerHTML = `
         <i class="bi bi-database-check" style="color:#10b981; font-size:18px;"></i>
         <span><strong>[DB 점검 이력]</strong> ${escapeHtml(data.file_name)} · L/C: <strong>${escapeHtml(data.lc_no || "-")}</strong> · 수입자: <strong>${escapeHtml(data.applicant || "-")}</strong> · 판정: ${badgeHtml}</span>
@@ -3873,27 +3876,39 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
     }
     beneficiary = (beneficiary && beneficiary !== "-") ? String(beneficiary).trim() : "-";
 
-    // 4. 불일치 및 주의(Warning/Review/Mismatch/주의) 정밀 판정
+    // 4. 불일치 및 주의(Warning/Review/Mismatch/주의) 정밀 분리 판정
     var mismatchCount = 0;
+    var warningCount = 0;
     matrix.forEach(function (r) {
       var res = String(r.result || r.verdict || r.status || "").toLowerCase().trim();
-      var isMismatch = res === "mismatch" || res === "fail" || res === "warning" || res === "warn" ||
-                       res === "review_required" || res === "unclear" ||
-                       res.indexOf("불일치") >= 0 || res.indexOf("주의") >= 0 || res.indexOf("검토") >= 0 || res.indexOf("오류") >= 0;
+      var isMismatch = res === "mismatch" || res === "fail" ||
+                       res.indexOf("불일치") >= 0 || res.indexOf("오류") >= 0;
+      var isWarning = res === "warning" || res === "warn" || res === "review_required" ||
+                      res === "unclear" || res === "missing" ||
+                      res.indexOf("주의") >= 0 || res.indexOf("검토") >= 0;
       if (isMismatch) {
         mismatchCount++;
+      } else if (isWarning) {
+        warningCount++;
       }
     });
 
-    // 전체 요약 상태가 review_required/on_hold/보류/주의인 경우 최소 1건 이상 보장
+    // 전체 요약 상태가 review_required/on_hold/보류/주의인 경우
     var overallStatusRaw = String(normPayload.overall_status || normPayload.overall_alert_level || "").toLowerCase();
-    if ((overallStatusRaw === "review_required" || overallStatusRaw === "on_hold" ||
-         overallStatusRaw === "warning" || overallStatusRaw === "warn" ||
-         overallStatusRaw.indexOf("보류") >= 0 || overallStatusRaw.indexOf("주의") >= 0 || overallStatusRaw.indexOf("검토") >= 0) && mismatchCount === 0) {
-      mismatchCount = 1;
-    }
+    var isReviewRequired = overallStatusRaw === "review_required" || overallStatusRaw === "on_hold" ||
+                           overallStatusRaw === "warning" || overallStatusRaw === "warn" ||
+                           overallStatusRaw.indexOf("보류") >= 0 || overallStatusRaw.indexOf("주의") >= 0 || overallStatusRaw.indexOf("검토") >= 0;
 
-    var status = mismatchCount === 0 ? "MATCH" : "MISMATCH";
+    // 3단계 정밀 상태 판정:
+    // 1) 순수 mismatch가 있으면 MISMATCH
+    // 2) 순수 mismatch는 없으나 warning 또는 검토필요 항목이 있으면 WARNING
+    // 3) 완전히 일치하면 MATCH
+    var status = "MATCH";
+    if (mismatchCount > 0) {
+      status = "MISMATCH";
+    } else if (warningCount > 0 || isReviewRequired) {
+      status = "WARNING";
+    }
 
     var ocrRel = calculateOcrReliability(parsed, finalJob);
 
@@ -3946,7 +3961,8 @@ async function saveInspectionToSupabase(file, storagePath, pdfUrl, parsed, final
         ocr_status: ocrRel.statusText,
         model: finalJob.model || (CONFIG && CONFIG.agentId) || "agt_hYy33EbPU93zggAb6W9z3G",
         config_id: configId || (CONFIG && CONFIG.configId) || "17",
-        total_tokens: tokens
+        total_tokens: tokens,
+        warning_count: warningCount
       },
       result_json: finalJob
     };

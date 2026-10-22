@@ -955,10 +955,14 @@
     }
 
     var html = filtered.map(function (row, idx) {
-      var isMatch = String(row.status || '').toUpperCase() === 'MATCH';
+      var stUpper = String(row.status || '').toUpperCase();
+      var isMatch = stUpper === 'MATCH';
+      var isWarning = stUpper === 'WARNING' || stUpper === 'REVIEW' || stUpper === 'WARN';
       var statusBadge = isMatch
         ? '<span class="badge-status badge-status-match"><i class="bi bi-check-circle-fill"></i> 정상 일치</span>'
-        : `<span class="badge-status badge-status-mismatch"><i class="bi bi-exclamation-triangle-fill"></i> 불일치 (${row.mismatch_count || 1}건)</span>`;
+        : (isWarning
+            ? `<span class="badge-status badge-status-proc"><i class="bi bi-info-circle-fill"></i> 검토 필요 (${(row.api_info && row.api_info.warning_count) ? row.api_info.warning_count + '건' : '주의'})</span>`
+            : `<span class="badge-status badge-status-mismatch"><i class="bi bi-exclamation-triangle-fill"></i> 불일치 (${row.mismatch_count || 1}건)</span>`);
 
       var rel = row.__reliability || getOcrReliability(row);
       var relBadge = `

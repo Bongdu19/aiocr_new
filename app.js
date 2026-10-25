@@ -2932,8 +2932,9 @@ function renderResult(parsed, finalJob) {
   renderChecklists((structured && structured.document_checklists) || data.document_checklists || (structured && structured.checklist_results));
 
   // LLM Assistant 동기화 (정제된 원본 데이터 및 파싱 규칙 준비)
+  window.currentNormalizedData = data;
   if (typeof window.updateLlmAssistantContext === "function") {
-    window.updateLlmAssistantContext(currentRawPayload);
+    window.updateLlmAssistantContext(currentRawPayload, data);
   }
 }
 

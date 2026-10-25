@@ -21,6 +21,7 @@
 
   // 현재 캐시된 원본 OCR 데이터 및 최근 생성된 마크다운 결과 (메모리 전용)
   var currentPayloadRef = null;
+  var currentNormalizedRef = null;
   var isGenerating = false;
   var lastGeneratedRawText = "";
 
@@ -48,7 +49,7 @@
 
     // 혹시 이미 app.js에서 currentRawPayload가 존재하는 경우 즉시 반영
     if (window.currentRawPayload) {
-      updateLlmAssistantContext(window.currentRawPayload);
+      updateLlmAssistantContext(window.currentRawPayload, window.currentNormalizedData || null);
     }
   }
 
@@ -338,13 +339,32 @@
     return sanitize(data, 0);
   }
 
+  // UI DOM 요소에서 텍스트 안전 추출 헬퍼 (null 방지용 최종 안전망)
+  function getDomText(elementId) {
+    var el = document.getElementById(elementId);
+    if (!el) return "";
+    var txt = (el.innerText || el.textContent || "").trim();
+    if (txt === "-" || txt === "결과 없음" || txt === "대기 중") return "";
+    return txt;
+  }
+
   /**
    * 2. 서류 스키마 및 원본 추출 데이터 선별 정리
    * 거대한 parse 스텝(OCR raw HTML)은 제외하고,
    * 서류 원본의 실제 추출 필드(extract_result, documents, data)를 중심 데이터셋으로 재구성 (10~30KB 내외 초경량)
    */
   function extractKeyDocumentsData(rawPayload) {
-    if (!rawPayload) return null;
+    var root = rawPayload || currentPayloadRef || (window.currentRawPayload || null);
+    var norm = currentNormalizedRef || (window.currentNormalizedData || null);
+
+    // DB 레코드 대응: root.result_json 이 있는 경우 언랩
+    if (root && root.result_json) {
+      if (typeof root.result_json === "string") {
+        try { root = JSON.parse(root.result_json); } catch (e) {}
+      } else if (typeof root.result_json === "object") {
+        root = root.result_json;
+      }
+    }
 
     var organized = {
       api_review_summary: null, // 1차 API 검토 요약 결과 (교차검증용)
@@ -354,8 +374,21 @@
       summary_notes: ""
     };
 
-    // 1) Upstage include: ["all"] steps 또는 output 처리
-    var stepsList = (rawPayload && Array.isArray(rawPayload.output)) ? rawPayload.output : ((rawPayload && Array.isArray(rawPayload.steps)) ? rawPayload.steps : null);
+    // (A) final_result 객체 직접 탐색 (sample6 및 DB 레코드 대응)
+    if (root && root.final_result && root.final_result.result) {
+      var fr = root.final_result.result;
+      var fStruct = fr.structured_result || fr;
+      organized.api_review_summary = cleanOcrJsonForLlm({
+        overall_status: fStruct.overall_status,
+        overall_alert_level: fStruct.overall_alert_level,
+        one_line_summary: fr.human_summary || fStruct.one_line_summary || "",
+        recommended_action: fStruct.recommended_action || "",
+        discrepancy_candidates: fStruct.discrepancy_candidates || []
+      });
+    }
+
+    // (B) Upstage include: ["all"] steps 또는 output 처리
+    var stepsList = (root && Array.isArray(root.output)) ? root.output : ((root && Array.isArray(root.steps)) ? root.steps : null);
     if (stepsList && stepsList.length > 0) {
       for (var i = 0; i < stepsList.length; i++) {
         var step = stepsList[i];
@@ -368,15 +401,15 @@
         }
 
         // review step(1차 API 검토 요약 결과) 수집
-        if (modelName.indexOf("review") !== -1 || modelName.indexOf("instruct") !== -1) {
-          if (step.result && step.result.structured_result) {
-            var sr = step.result.structured_result;
+        if (!organized.api_review_summary && (modelName.indexOf("review") !== -1 || modelName.indexOf("instruct") !== -1)) {
+          if (step.result && (step.result.structured_result || step.result.overall_status)) {
+            var sr = step.result.structured_result || step.result;
             organized.api_review_summary = cleanOcrJsonForLlm({
               overall_status: sr.overall_status,
               overall_alert_level: sr.overall_alert_level,
-              one_line_summary: sr.one_line_summary,
-              recommended_action: sr.recommended_action,
-              discrepancy_candidates: sr.discrepancy_candidates
+              one_line_summary: step.result.human_summary || sr.one_line_summary || "",
+              recommended_action: sr.recommended_action || "",
+              discrepancy_candidates: sr.discrepancy_candidates || []
             });
           }
         }
@@ -396,14 +429,14 @@
               var textTrim = String(cItem.text).trim();
               if (textTrim.startsWith("{") || textTrim.startsWith("[")) {
                 var parsedInner = JSON.parse(textTrim);
-                if (parsedInner && parsedInner.structured_result) {
+                if (!organized.api_review_summary && parsedInner && parsedInner.structured_result) {
                   var srInner = parsedInner.structured_result;
                   organized.api_review_summary = cleanOcrJsonForLlm({
                     overall_status: srInner.overall_status,
                     overall_alert_level: srInner.overall_alert_level,
-                    one_line_summary: srInner.one_line_summary,
-                    recommended_action: srInner.recommended_action,
-                    discrepancy_candidates: srInner.discrepancy_candidates
+                    one_line_summary: parsedInner.human_summary || srInner.one_line_summary || "",
+                    recommended_action: srInner.recommended_action || "",
+                    discrepancy_candidates: srInner.discrepancy_candidates || []
                   });
                 } else if (parsedInner && typeof parsedInner === "object" && !parsedInner.api) {
                   var docType = parsedInner.document_type || modelName.replace(/^information extract\s*-\s*/i, "").replace(/_schema$/i, "").trim();
@@ -418,25 +451,67 @@
       }
     }
 
-    // 2) instruct_result / structured_result 내의 핵심 서류 키 및 일자 흐름
-    var struct = (rawPayload.instruct_result && rawPayload.instruct_result.structured_result) || rawPayload.structured_result || rawPayload;
-    if (struct.document_keys) {
-      organized.document_keys = cleanOcrJsonForLlm(struct.document_keys);
+    // (C) instruct_result / structured_result 내의 핵심 서류 키 및 일자 흐름
+    var struct = (root && root.instruct_result && root.instruct_result.structured_result) || (root && root.structured_result) || root;
+    if (struct) {
+      if (struct.document_keys) {
+        organized.document_keys = cleanOcrJsonForLlm(struct.document_keys);
+      }
+      if (struct.date_checks) {
+        organized.date_records = cleanOcrJsonForLlm(struct.date_checks);
+      }
+      if (struct.one_line_summary) {
+        organized.summary_notes = struct.one_line_summary;
+      }
+      if (!organized.api_review_summary && (struct.overall_status || struct.discrepancy_candidates || struct.one_line_summary)) {
+        organized.api_review_summary = cleanOcrJsonForLlm({
+          overall_status: struct.overall_status,
+          overall_alert_level: struct.overall_alert_level,
+          one_line_summary: struct.one_line_summary || struct.human_summary || "",
+          recommended_action: struct.recommended_action || "",
+          discrepancy_candidates: struct.discrepancy_candidates || []
+        });
+      }
     }
-    if (struct.date_checks) {
-      organized.date_records = cleanOcrJsonForLlm(struct.date_checks);
-    }
-    if (struct.one_line_summary) {
-      organized.summary_notes = struct.one_line_summary;
-    }
-    if (!organized.api_review_summary && (struct.overall_status || struct.discrepancy_candidates || struct.one_line_summary)) {
+
+    // (D) 정규화 데이터(app.js normalizeResultPayload 결과) 기반 폴백
+    if (!organized.api_review_summary && norm) {
       organized.api_review_summary = cleanOcrJsonForLlm({
-        overall_status: struct.overall_status,
-        overall_alert_level: struct.overall_alert_level,
-        one_line_summary: struct.one_line_summary,
-        recommended_action: struct.recommended_action,
-        discrepancy_candidates: struct.discrepancy_candidates
+        overall_status: norm.overall_status || "review_required",
+        overall_alert_level: norm.overall_alert_level || "warning",
+        one_line_summary: norm.one_line_summary || norm.human_summary || "",
+        recommended_action: norm.recommended_action || "",
+        discrepancy_candidates: norm.discrepancy_candidates || []
       });
+    }
+
+    // (E) 화면 UI DOM 직접 스크랩 기반 최종 안전망 (화면에 요약이 있다면 절대 null 불가)
+    if (!organized.api_review_summary || !organized.api_review_summary.one_line_summary) {
+      var domStatus = getDomText("overallStatusDesc");
+      var domAlert = getDomText("alertLevelDesc");
+      var domAction = getDomText("recommendedAction");
+      var domSummary = getDomText("oneLineSummary");
+
+      if (domStatus || domAction || domSummary) {
+        organized.api_review_summary = {
+          overall_status: (organized.api_review_summary && organized.api_review_summary.overall_status) || domStatus || "검토 필요",
+          overall_alert_level: (organized.api_review_summary && organized.api_review_summary.overall_alert_level) || domAlert || "주의",
+          one_line_summary: (organized.api_review_summary && organized.api_review_summary.one_line_summary) || domSummary || "",
+          recommended_action: (organized.api_review_summary && organized.api_review_summary.recommended_action) || domAction || "",
+          discrepancy_candidates: (organized.api_review_summary && organized.api_review_summary.discrepancy_candidates) || (norm && norm.discrepancy_candidates) || []
+        };
+      }
+    }
+
+    // 만약 documents_extracted가 비어있는 경우 (단순 JSON 포맷)
+    if (Object.keys(organized.documents_extracted).length === 0 && struct) {
+      var safeData = {};
+      if (struct.document_keys) safeData.document_keys = struct.document_keys;
+      if (struct.date_checks) safeData.date_checks = struct.date_checks;
+      if (struct.document_presence) safeData.document_presence = struct.document_presence;
+      if (struct.discrepancy_candidates) safeData.discrepancy_candidates = cleanOcrJsonForLlm(struct.discrepancy_candidates);
+      if (organized.api_review_summary) safeData.api_review_summary = organized.api_review_summary;
+      return cleanOcrJsonForLlm(safeData);
     }
 
     // 만약 documents_extracted가 비어있는 경우 (단순 JSON 포맷)
@@ -919,12 +994,13 @@
   /**
    * 7. 외부(app.js)에서 호출하는 상태 업데이트 브릿지
    */
-  function updateLlmAssistantContext(payload) {
-    currentPayloadRef = payload;
+  function updateLlmAssistantContext(payload, normalizedData) {
+    currentPayloadRef = payload || currentPayloadRef;
+    currentNormalizedRef = normalizedData || window.currentNormalizedData || null;
     if (!dom.statusBadge) cacheDomElements();
     if (!dom.statusBadge) return;
 
-    if (payload) {
+    if (payload || currentNormalizedRef) {
       var extracted = extractKeyDocumentsData(payload);
       var docCount = extracted && extracted.documents_extracted ? Object.keys(extracted.documents_extracted).length : 0;
       var countText = docCount > 0 ? " (" + docCount + "개 서류 추출됨)" : " (데이터 로드됨)";
@@ -942,6 +1018,7 @@
   // 전역 노출
   window.updateLlmAssistantContext = updateLlmAssistantContext;
   window.cleanOcrJsonForLlm = cleanOcrJsonForLlm;
+  window.extractKeyDocumentsData = extractKeyDocumentsData;
 
   // DOMContentLoaded 시 실행
   if (document.readyState === "loading") {

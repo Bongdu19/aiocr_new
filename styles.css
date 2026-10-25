@@ -3706,6 +3706,53 @@ details.raw-json-details[open] {
   overflow-x: auto;
 }
 
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Mermaid Fallback Box when syntax error occurs */
+.mermaid-fallback-box {
+  display: block;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--warning-color, #f59e0b);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.mermaid-fallback-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d97706;
+}
+
+[data-theme="dark"] .mermaid-fallback-header {
+  color: #fbbf24;
+}
+
+.mermaid-fallback-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mermaid-fallback-code {
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1.5;
+  overflow-x: auto;
+  margin: 0;
+}
+
 /* Error Banner */
 .llm-error-banner {
   display: flex;

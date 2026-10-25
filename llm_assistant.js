@@ -81,6 +81,7 @@
           startOnLoad: false,
           theme: isDark ? "dark" : "default",
           securityLevel: "loose",
+          suppressErrorRendering: true, // 에러 발생 시 라이브러리의 흉측한 기본 에러 SVG를 무단 렌더링하지 않도록 방지
           flowchart: { useMaxWidth: true, htmlLabels: true, curve: "basis" }
         });
       } catch (e) {
@@ -445,10 +446,17 @@
       "   - packing_list_schema: 포장명세서 (포장 개수, 포장단위, 순중량 Net Wt, 총중량 Gross Wt, CBM 등)",
       "   - marine_cargo_insurance_schema: 적하보험증권 (부보금액, 증권일자, 부보조건, 약관 등)",
       "   - certificate_of_origin_schema: 원산지증명서 (원산지 국가, 수출자, 생산자, 인증번호 등)",
-      "4. 답변 출력 형식 (반드시 준수):",
+      "4. 답변 출력 형식 및 시각화 다이어그램 규칙 (엄격 준수):",
       "   - 결과는 사용자가 한눈에 파악할 수 있도록 마크다운 표(Table) 형태로 정리하여 제공하십시오.",
       "   - 각 표는 명확한 헤더(예: 서류명, 항목, 기재 내용, 일치/검증 결과, 비고 등)를 포함하십시오.",
-      "   - 서류 발행 순서, 물류 흐름, 당사자 관계도 등 시각화가 유용한 질문일 경우 Mermaid 다이어그램(```mermaid ... ```)을 적극 활용하여 그림 형태로 도식화하십시오.",
+      "   - 서류 발행 순서, 물류 흐름, 당사자 관계도 등 시각화 질문 시 Mermaid 다이어그램(```mermaid ... ```)을 반드시 작성하십시오.",
+      "   ★ Mermaid 다이어그램 문법 필수 지침 (Syntax Error 방지):",
+      "     1) 다이어그램 유형은 반드시 'flowchart TD' 또는 'sequenceDiagram'만 사용하십시오. (journey, gantt 등은 절대 사용 금지)",
+      "     2) flowchart 노드 텍스트: 한글, 날짜, 괄호, 슬래시(/), 콤마 등 모든 텍스트는 반드시 노드 라벨 전체를 큰따옴표(\")로 감싸십시오.",
+      "        [올바른 예]: STEP1[\"신용장 개설 (2026-08-25)\"] --> STEP2[\"상업송장/패킹리스트 작성 (09-02)\"]",
+      "        [틀린 예]: STEP1[신용장 개설 (2026-08-25)] (따옴표 누락 시 구문 분석 오류 발생)",
+      "     3) 노드 ID는 반드시 공백이나 특수문자가 없는 순수 영문/숫자(예: LC, INV, BL, INS, CO, STEP1 등)만 사용하십시오.",
+      "     4) sequenceDiagram 사용 시 화살표(-->>, ->>, ->)를 정확히 사용하고 메시지 내부에 콜론(:)이나 따옴표 충돌이 없도록 하십시오.",
       "   - 한국어로 정중하고 전문적인 어조(수출입 은행 심사역 스타일)로 명료하게 답변하십시오.",
       "==================================================================",
       "",
@@ -648,31 +656,135 @@
     }
   }
 
-  // Mermaid 코드 블록 탐색 및 렌더링
-  function renderMermaidDiagrams() {
+  // HTML 이스케이프 헬퍼
+  function escapeHtml(str) {
+    if (!str) return "";
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  /**
+   * Mermaid 다이어그램 코드 자동 정제 및 문법 보정 함수
+   * LLM이 자주 범하는 따옴표 누락, 특수문자, HTML 엔티티 등을 자동 수리
+   */
+  function sanitizeMermaidCode(rawCode) {
+    if (!rawCode) return "";
+    var code = rawCode.trim();
+
+    // 1. HTML 엔티티 디코딩
+    code = code
+      .replace(/&gt;/g, ">")
+      .replace(/&lt;/g, "<")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, "&");
+
+    // 2. 만약 첫 줄에 다이어그램 유형(flowchart, sequenceDiagram 등)이 없으면 기본 flowchart TD 지정
+    var firstLine = code.split("\n")[0].trim();
+    var validTypes = ["graph", "flowchart", "sequencediagram", "classdiagram", "statediagram", "erdiagram", "gantt", "pie", "journey"];
+    var hasValidType = validTypes.some(function (t) {
+      return firstLine.toLowerCase().startsWith(t);
+    });
+    if (!hasValidType) {
+      code = "flowchart TD\n" + code;
+    }
+
+    // 3. flowchart / graph 에서 따옴표 없는 대괄호 라벨 자동 따옴표 감싸기
+    // 예: NODE[내용 (괄호) / 슬래시] -> NODE["내용 (괄호) / 슬래시"]
+    code = code.replace(/([a-zA-Z0-9_-]+)\[([^"\]\r\n]+)\]/g, function (match, id, label) {
+      var cleanLabel = label.replace(/"/g, "'").trim();
+      return id + '["' + cleanLabel + '"]';
+    });
+
+    // 4. flowchart / graph 에서 따옴표 없는 원형 괄호 라벨 자동 따옴표 감싸기
+    // 예: NODE(내용 (괄호)) -> NODE("내용 (괄호)")
+    code = code.replace(/([a-zA-Z0-9_-]+)\(([^"\)\r\n]+)\)/g, function (match, id, label) {
+      var cleanLabel = label.replace(/"/g, "'").trim();
+      return id + '("' + cleanLabel + '")';
+    });
+
+    return code;
+  }
+
+  // Mermaid 코드 블록 탐색 및 렌더링 (비동기 render + 자동 복구 + 친절한 폴백 UI)
+  async function renderMermaidDiagrams() {
     if (!window.mermaid || !dom.responseContent) return;
 
     // <pre><code class="language-mermaid"> 또는 <pre class="mermaid"> 탐색
     var codeBlocks = dom.responseContent.querySelectorAll("code.language-mermaid, pre.mermaid, code.mermaid");
     if (!codeBlocks || codeBlocks.length === 0) return;
 
-    codeBlocks.forEach(function (block, idx) {
+    for (var idx = 0; idx < codeBlocks.length; idx++) {
+      var block = codeBlocks[idx];
       var parent = block.tagName.toLowerCase() === "code" ? block.parentElement : block;
       var rawMermaid = block.textContent.trim();
+      var sanitized = sanitizeMermaidCode(rawMermaid);
+      var renderId = "mermaid_svg_" + idx + "_" + Math.floor(Math.random() * 1000000);
+
       var container = document.createElement("div");
       container.className = "mermaid-container";
-      container.id = "mermaid-render-" + idx + "-" + Date.now();
-      container.textContent = rawMermaid;
-
+      container.id = "mermaid-wrap-" + idx;
       parent.parentNode.replaceChild(container, parent);
-    });
 
-    try {
-      mermaid.run({
-        querySelector: ".mermaid-container"
-      });
-    } catch (e) {
-      console.warn("[LLM] Mermaid 렌더링 오류:", e);
+      try {
+        // 1차: 정제된 코드로 렌더링 시도
+        var renderResult = await mermaid.render(renderId, sanitized);
+        container.innerHTML = renderResult.svg;
+      } catch (err1) {
+        console.warn("[LLM] Mermaid 1차 렌더링 실패, 보정 재시도:", err1);
+        try {
+          // 2차: flowchart TD로 변환 및 핵심 노드 추출 시도
+          var lines = rawMermaid.split("\n");
+          var flowLines = ["flowchart TD"];
+          var stepCount = 1;
+          lines.forEach(function (line) {
+            var trimmed = line.trim();
+            if (trimmed && !trimmed.startsWith("journey") && !trimmed.startsWith("section") && !trimmed.startsWith("title")) {
+              var parts = trimmed.split(":");
+              var nodeText = parts[0].replace(/["\[\]\(\)]/g, "").trim();
+              if (nodeText) {
+                flowLines.push("  N" + stepCount + '["' + nodeText + '"]');
+                if (stepCount > 1) {
+                  flowLines.push("  N" + (stepCount - 1) + " --> N" + stepCount);
+                }
+                stepCount++;
+              }
+            }
+          });
+          var flowCode = flowLines.join("\n");
+          var renderResult2 = await mermaid.render(renderId + "_fix", flowCode);
+          container.innerHTML = renderResult2.svg;
+        } catch (err2) {
+          console.error("[LLM] Mermaid 최종 렌더링 실패:", err2);
+          // 친절하고 세련된 다이어그램 코드 뷰(폴백 카드) 제공
+          container.classList.add("mermaid-fallback-box");
+          container.innerHTML = [
+            '<div class="mermaid-fallback-header">',
+            '  <div class="mermaid-fallback-title"><i class="bi bi-diagram-3-fill"></i> 다이어그램 코드 뷰 (Mermaid 문법 오류로 시각화 미적용)</div>',
+            '  <button class="btn btn-sm btn-outline-secondary mermaid-copy-code-btn" type="button"><i class="bi bi-clipboard"></i> 다이어그램 코드 복사</button>',
+            '</div>',
+            '<pre class="mermaid-fallback-code"><code>' + escapeHtml(rawMermaid) + '</code></pre>'
+          ].join("");
+
+          var copyBtn = container.querySelector(".mermaid-copy-code-btn");
+          if (copyBtn) {
+            (function (codeToCopy, btn) {
+              btn.addEventListener("click", function () {
+                navigator.clipboard.writeText(codeToCopy).then(function () {
+                  btn.innerHTML = '<i class="bi bi-check-lg"></i> 복사됨!';
+                  setTimeout(function () {
+                    btn.innerHTML = '<i class="bi bi-clipboard"></i> 다이어그램 코드 복사';
+                  }, 2000);
+                });
+              });
+            })(rawMermaid, copyBtn);
+          }
+        }
+      }
     }
   }
 

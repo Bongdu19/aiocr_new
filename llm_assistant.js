@@ -15,7 +15,7 @@
 
   // 기본 설정 (인메모리 전용, 로컬 스토리지에 절대 저장하지 않음)
   var DEFAULT_API_KEY = (typeof atob === "function")
-    ? atob("QVEuQWI4Uk42STJ2ZjJVTmRjT2JXN2RBS0xuZE9yY2djYUxZWmUyMEY3cFBteTh6aWUyTXc=")
+    ? atob("QVEuQWI4Uk42STJ2ZjJVTmRjT2JXN2RBS0xuZE9yY2djYUxZWmUyMEY3cFBteTh6aWUybXc=")
     : "";
   var DEFAULT_MODEL = "gemini-3.5-flash-lite";
 
@@ -495,7 +495,8 @@
     var response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey
       },
       body: JSON.stringify(requestBody)
     });
@@ -508,6 +509,11 @@
         errData = { message: await response.text() };
       }
       var errMsg = (errData && errData.error && errData.error.message) ? errData.error.message : ("HTTP 오류 " + response.status);
+      if (response.status === 429) {
+        errMsg = "Gemini API 무료 등급 사용 한도(분당 요청 수 또는 분당 토큰 수 TPM)를 일시 초과했습니다. 약 1분 후 다시 시도해주세요. (" + errMsg + ")";
+      } else if (response.status === 401) {
+        errMsg = "Gemini API 인증 실패 (유효하지 않은 API 키): " + errMsg;
+      }
       throw new Error("Gemini API 응답 실패 (" + response.status + "): " + errMsg);
     }
 

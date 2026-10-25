@@ -1102,6 +1102,9 @@ function clearResult() {
   currentChecklistData = null;
   activeChecklistTab = null;
   currentRawPayload = null;
+  if (typeof window.updateLlmAssistantContext === "function") {
+    window.updateLlmAssistantContext(null);
+  }
   setStatus("대기 중", "");
 }
 
@@ -2927,6 +2930,11 @@ function renderResult(parsed, finalJob) {
   rows = (structured && structured.comparison_matrix) || data.comparison_matrix || [];
   renderComparisonTable(rows);
   renderChecklists((structured && structured.document_checklists) || data.document_checklists || (structured && structured.checklist_results));
+
+  // LLM Assistant 동기화 (정제된 원본 데이터 및 파싱 규칙 준비)
+  if (typeof window.updateLlmAssistantContext === "function") {
+    window.updateLlmAssistantContext(currentRawPayload);
+  }
 }
 
 function loadConfig() {

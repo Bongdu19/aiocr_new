@@ -17,6 +17,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <!-- Supabase CDN Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Markdown & Mermaid CDN for LLM Answers -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 </head>
 
 <body>
@@ -227,6 +230,125 @@
 
           <pre id="rawJson" class="raw-json">결과 없음</pre>
         </details>
+
+        <!-- 6️⃣ 🤖 AI 서류 정밀 질의응답 (Gemini LLM Assistant) - 기본 폴딩 상태 -->
+        <details class="card llm-chat-card" id="llmChatDetails">
+          <summary class="llm-chat-summary">
+            <div class="llm-summary-left">
+              <span class="llm-badge"><i class="bi bi-robot"></i> Gemini AI</span>
+              <span class="llm-title">AI 서류 정밀 심층 질의응답 (LLM Assistant)</span>
+              <span id="llmDocStatusBadge" class="llm-doc-status-badge badge-waiting">서류 로드 대기</span>
+            </div>
+            <span class="summary-hint"><i class="bi bi-chevron-down"></i> 클릭하여 펼치기 / 접기</span>
+          </summary>
+
+          <div class="llm-chat-body">
+            <!-- 상단 설정 & 모델/키 바 -->
+            <div class="llm-config-bar">
+              <div class="llm-config-item">
+                <label for="llmApiKey"><i class="bi bi-key-fill"></i> Gemini API Key</label>
+                <div class="llm-input-with-action">
+                  <input id="llmApiKey" class="input input-sm" type="password" placeholder="Gemini API Key..." />
+                  <button id="llmKeyToggleBtn" class="btn btn-ghost btn-sm" type="button" title="키 표시/숨김"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+              <div class="llm-config-item">
+                <label for="llmModelSelect"><i class="bi bi-cpu"></i> LLM 모델</label>
+                <select id="llmModelSelect" class="select select-sm">
+                  <option value="gemini-3.5-flash-lite" selected>Gemini 3.5 Flash-Lite (빠르고 정확함 - 권장)</option>
+                  <option value="gemini-flash-latest">Gemini Flash Latest (기본 플래시)</option>
+                  <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                  <option value="gemini-3.8-flash">Gemini 3.8 Flash</option>
+                </select>
+              </div>
+              <div class="llm-config-badge-group">
+                <span class="llm-feature-pill" title="JSON 내 바운딩 박스/좌표를 제거하여 컨텍스트 토큰을 절약합니다.">
+                  <i class="bi bi-bounding-box-circles"></i> 위치좌표 자동 정제 ON
+                </span>
+                <span class="llm-feature-pill" title="1차 기계 검토 결과가 아닌 서류 원본 추출 필드에 집중합니다.">
+                  <i class="bi bi-file-earmark-check"></i> 원본 서류 중심 질의 ON
+                </span>
+              </div>
+            </div>
+
+            <!-- 프롬프트 / 서류 안내 팁 -->
+            <div class="llm-instruction-banner">
+              <i class="bi bi-info-circle-fill"></i>
+              <span>점검 실행 후 추출된 무역 서류(L/C, Invoice, B/L 등)의 원천 데이터를 바탕으로, 표(Table) 또는 시각화 다이어그램 형태로 심층 질의할 수 있습니다.</span>
+            </div>
+
+            <!-- 빠른 추천 질문 칩 (Quick Question Chips) -->
+            <div class="llm-quick-questions">
+              <div class="quick-questions-label"><i class="bi bi-lightning-charge-fill"></i> 실무 추천 질문 바로가기:</div>
+              <div class="quick-chips-wrapper">
+                <button class="quick-chip-btn" type="button" data-question="모든 서류(B/L, 패킹리스트 등)에 기재된 컨테이너 번호, 씰(Seal) 번호, 포장 수량, 중량을 표로 한눈에 정리해줘.">
+                  📦 컨테이너 & 씰 번호 목록 표
+                </button>
+                <button class="quick-chip-btn" type="button" data-question="각 서류(L/C, Invoice, B/L, 보험증권 등)별 서류명, 문서 식별번호, 발행일자, 발행인(서명자)을 표로 비교해줘.">
+                  📅 서류별 발행일 및 발행인 비교 표
+                </button>
+                <button class="quick-chip-btn" type="button" data-question="상업송장(Invoice)과 패킹리스트에 기재된 품목명, 단가, 수량 및 총액 계산이 정확히 일치하는지 계산 검증하고 표로 보여줘.">
+                  💰 송장 품목 단가·수량 검산 표
+                </button>
+                <button class="quick-chip-btn" type="button" data-question="서류 상에 기재된 모든 특별 조항(Special Clauses, Remarks, 허용오차, 은행 지시사항 등)을 요약 정리해줘.">
+                  📜 서류상 특약 조항/비고 요약
+                </button>
+                <button class="quick-chip-btn" type="button" data-question="이 무역 건의 서류 발행 흐름 및 운송 일정(선적항->양하항, 날짜 순서)을 Mermaid 다이어그램과 함께 표로 설명해줘.">
+                  🔄 서류 흐름 & 일정 (다이어그램)
+                </button>
+              </div>
+            </div>
+
+            <!-- 질문 입력창 & 전송 버튼 -->
+            <div class="llm-input-area">
+              <div class="llm-textarea-wrap">
+                <textarea id="llmQuestionInput" class="input llm-textarea" rows="3" placeholder="무역 서류에 대해 질문할 내용을 입력하세요... (예: B/L과 인보이스의 선적항/양하항 명칭이 영문 철자까지 정확한지 확인해줘)"></textarea>
+              </div>
+              <div class="llm-action-bar">
+                <div class="llm-action-left">
+                  <button id="llmPreviewContextBtn" class="btn btn-ghost btn-sm" type="button" title="LLM에 전달될 정제된 서류 데이터 및 파싱 규칙 프롬프트를 확인합니다">
+                    <i class="bi bi-eye"></i> 전송 프롬프트 미리보기
+                  </button>
+                  <button id="llmClearChatBtn" class="btn btn-ghost btn-sm" type="button" title="질문 및 답변 초기화">
+                    <i class="bi bi-arrow-counterclockwise"></i> 초기화
+                  </button>
+                </div>
+                <div class="llm-action-right">
+                  <button id="llmSendBtn" class="btn btn-primary" type="button">
+                    <i class="bi bi-send-fill"></i> <span>Gemini에게 질문하기</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 프롬프트 미리보기 모달 / 아코디언 (접힘) -->
+            <details id="llmContextPreviewDetails" class="llm-context-preview" style="display: none;">
+              <summary class="llm-preview-summary"><i class="bi bi-file-earmark-code"></i> LLM 전달 시스템 프롬프트 및 정제된 JSON 미리보기</summary>
+              <pre id="llmContextPreviewContent" class="llm-preview-content"></pre>
+            </details>
+
+            <!-- 응답 결과 영역 -->
+            <div id="llmResponseWrapper" class="llm-response-wrapper" style="display: none;">
+              <div class="llm-response-header">
+                <div class="llm-response-title">
+                  <i class="bi bi-chat-left-quote-fill"></i> <span>Gemini 응답 결과</span>
+                  <span id="llmModelUsedBadge" class="badge-model-info"></span>
+                </div>
+                <div class="llm-response-tools">
+                  <button id="llmCopyResponseBtn" class="btn btn-secondary btn-sm" type="button" title="답변 복사"><i class="bi bi-clipboard"></i> 복사</button>
+                </div>
+              </div>
+              <div id="llmLoadingSpinner" class="llm-loading-spinner" style="display: none;">
+                <div class="spinner-icon"><i class="bi bi-arrow-repeat spin"></i></div>
+                <div class="loading-text">
+                  <strong>Gemini AI가 서류 원본 데이터를 정밀 분석하고 있습니다...</strong>
+                  <span>(질문 내용에 따라 표 및 다이어그램 생성 중)</span>
+                </div>
+              </div>
+              <div id="llmResponseContent" class="llm-markdown-body"></div>
+            </div>
+          </div>
+        </details>
       </section>
     </main>
   </div>
@@ -320,5 +442,6 @@
   </div>
 
   <script src="./app.js?v=20261022_v27"></script>
+  <script src="./llm_assistant.js?v=20261025_v1"></script>
 </body>
 </html>

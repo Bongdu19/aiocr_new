@@ -304,7 +304,7 @@
             <!-- 질문 입력창 & 전송 버튼 -->
             <div class="llm-input-area">
               <div class="llm-textarea-wrap">
-                <textarea id="llmQuestionInput" class="input llm-textarea" rows="3" placeholder="무역 서류에 대해 질문할 내용을 입력하세요... (예: B/L과 인보이스의 선적항/양하항 명칭이 영문 철자까지 정확한지 확인해줘)"></textarea>
+                <textarea id="llmQuestionInput" class="input llm-textarea" rows="3" placeholder="무역 서류에 대해 질문할 내용을 입력하세요... (상단 추천 질문 클릭 시 입력창에 자동 입력되며, Ctrl+Enter 또는 아래 버튼으로 전송합니다)"></textarea>
               </div>
               <div class="llm-action-bar">
                 <div class="llm-action-left">
@@ -337,7 +337,12 @@
                   <span id="llmModelUsedBadge" class="badge-model-info"></span>
                 </div>
                 <div class="llm-response-tools">
-                  <button id="llmCopyResponseBtn" class="btn btn-secondary btn-sm" type="button" title="답변 복사"><i class="bi bi-clipboard"></i> 복사</button>
+                  <button id="llmCopyResponseBtn" class="btn btn-secondary btn-sm" type="button" title="마크다운 및 표 내용 전체를 클립보드에 복사합니다">
+                    <i class="bi bi-clipboard"></i> 복사
+                  </button>
+                  <button id="llmDownloadResponseBtn" class="btn btn-secondary btn-sm" type="button" title="질문 및 답변 전체를 마크다운(.md) 파일로 다운로드합니다">
+                    <i class="bi bi-download"></i> 다운로드 (.md)
+                  </button>
                 </div>
               </div>
               <div id="llmLoadingSpinner" class="llm-loading-spinner" style="display: none;">

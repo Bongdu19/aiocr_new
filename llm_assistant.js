@@ -19,9 +19,10 @@
     : "";
   var DEFAULT_MODEL = "gemini-3.5-flash-lite";
 
-  // 현재 캐시된 원본 OCR 데이터 (메모리 전용)
+  // 현재 캐시된 원본 OCR 데이터 및 최근 생성된 마크다운 결과 (메모리 전용)
   var currentPayloadRef = null;
   var isGenerating = false;
+  var lastGeneratedRawText = "";
 
   // DOM 요소 캐시
   var dom = {};
@@ -38,9 +39,6 @@
     } catch (e) {}
 
     // 기본값 설정 (메모리 DOM 상에만 세팅)
-    if (dom.apiKeyInput) {
-      dom.apiKeyInput.value = DEFAULT_API_KEY;
-    }
     if (dom.modelSelect) {
       dom.modelSelect.value = DEFAULT_MODEL;
     }
@@ -70,6 +68,7 @@
     dom.responseContent = document.getElementById("llmResponseContent");
     dom.modelUsedBadge = document.getElementById("llmModelUsedBadge");
     dom.copyResponseBtn = document.getElementById("llmCopyResponseBtn");
+    dom.downloadResponseBtn = document.getElementById("llmDownloadResponseBtn");
     dom.quickChips = document.querySelectorAll(".quick-chip-btn");
   }
 
@@ -92,35 +91,41 @@
 
   // 이벤트 바인딩
   function bindEvents() {
-    // 질문 전송 버튼
+    // [Gemini에게 질문하기] 버튼 클릭 시에만 명시적으로 API 호출
     if (dom.sendBtn) {
       dom.sendBtn.addEventListener("click", handleSendQuestion);
     }
 
-    // 엔터키 전송 (Shift+Enter는 줄바꿈)
+    // 엔터키 처리: 일반 Enter는 자연스러운 줄바꿈(개행), Ctrl+Enter(또는 Cmd+Enter) 시에만 질문 전송
     if (dom.questionInput) {
       dom.questionInput.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" && !e.shiftKey) {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
           e.preventDefault();
           handleSendQuestion();
         }
       });
     }
 
-    // 추천 질문 칩 클릭
+    // 추천 질문 바로가기 칩 클릭: 질문창에 텍스트만 채워넣고 대기 (즉시 전송 안 함)
     if (dom.quickChips && dom.quickChips.length > 0) {
       dom.quickChips.forEach(function (chip) {
         chip.addEventListener("click", function () {
           var question = chip.getAttribute("data-question");
           if (question && dom.questionInput) {
+            // 다른 칩 active 스타일 해제 후 현재 칩 강조
+            dom.quickChips.forEach(function (c) { c.classList.remove("active-chip"); });
+            chip.classList.add("active-chip");
+
+            // 질문 입력창에 질문 텍스트 채우기 및 포커스
             dom.questionInput.value = question;
             dom.questionInput.focus();
+
             // 질문 카드가 닫혀있다면 펼치기
             if (dom.container && !dom.container.open) {
               dom.container.open = true;
             }
-            // 바로 질문 전송 실행
-            handleSendQuestion();
+
+            // 💡 중요: 질문을 채운 후 자동 전송하지 않고 사용자가 [질문하기] 버튼을 누르도록 대기!
           }
         });
       });
@@ -133,6 +138,10 @@
         if (dom.responseWrapper) dom.responseWrapper.style.display = "none";
         if (dom.responseContent) dom.responseContent.innerHTML = "";
         if (dom.previewDetails) dom.previewDetails.style.display = "none";
+        lastGeneratedRawText = "";
+        if (dom.quickChips) {
+          dom.quickChips.forEach(function (c) { c.classList.remove("active-chip"); });
+        }
       });
     }
 
@@ -163,14 +172,17 @@
       });
     }
 
-    // 답변 복사 버튼
-    if (dom.copyResponseBtn && dom.responseContent) {
+    // 답변 클립보드 복사 버튼 (표 마크다운 원본 온전 복사)
+    if (dom.copyResponseBtn) {
       dom.copyResponseBtn.addEventListener("click", function () {
-        var textToCopy = dom.responseContent.innerText || dom.responseContent.textContent;
-        if (!textToCopy) return;
+        var textToCopy = lastGeneratedRawText || (dom.responseContent ? (dom.responseContent.innerText || dom.responseContent.textContent) : "");
+        if (!textToCopy) {
+          alert("복사할 응답 결과가 없습니다.");
+          return;
+        }
         navigator.clipboard.writeText(textToCopy).then(function () {
           var originalHtml = dom.copyResponseBtn.innerHTML;
-          dom.copyResponseBtn.innerHTML = '<i class="bi bi-check-lg"></i> 복사 완료';
+          dom.copyResponseBtn.innerHTML = '<i class="bi bi-check-lg"></i> 복사 완료!';
           dom.copyResponseBtn.classList.add("btn-success");
           setTimeout(function () {
             dom.copyResponseBtn.innerHTML = originalHtml;
@@ -179,6 +191,54 @@
         }).catch(function (err) {
           alert("클립보드 복사에 실패했습니다: " + err);
         });
+      });
+    }
+
+    // 답변 파일 다운로드 (.md 마크다운 파일 저장)
+    if (dom.downloadResponseBtn) {
+      dom.downloadResponseBtn.addEventListener("click", function () {
+        var rawAnswer = lastGeneratedRawText || (dom.responseContent ? (dom.responseContent.innerText || dom.responseContent.textContent) : "");
+        if (!rawAnswer) {
+          alert("다운로드할 응답 결과가 없습니다.");
+          return;
+        }
+
+        var currentQuestion = dom.questionInput ? dom.questionInput.value.trim() : "무역 서류 정밀 질의";
+        var now = new Date();
+        var dateFormatted = now.getFullYear() +
+          String(now.getMonth() + 1).padStart(2, "0") +
+          String(now.getDate()).padStart(2, "0") + "_" +
+          String(now.getHours()).padStart(2, "0") +
+          String(now.getMinutes()).padStart(2, "0") +
+          String(now.getSeconds()).padStart(2, "0");
+        var filename = "AI-OCR_Gemini_질의결과_" + dateFormatted + ".md";
+
+        var markdownDocument = [
+          "# 🤖 신용장 무역 서류 AI 심층 질의응답 결과",
+          "",
+          "- **생성 일시**: " + now.toLocaleString(),
+          "- **사용 모델**: " + (dom.modelUsedBadge ? dom.modelUsedBadge.textContent : "Gemini"),
+          "- **사용자 질의**: " + currentQuestion,
+          "",
+          "---",
+          "",
+          "## 📋 Gemini 응답 내용 (표 및 분석 결과)",
+          "",
+          rawAnswer,
+          "",
+          "---",
+          "> 본 결과는 Upstage AI-OCR 추출 원본 데이터를 바탕으로 Google Gemini LLM이 실시간 분석한 내용입니다."
+        ].join("\n");
+
+        var blob = new Blob([markdownDocument], { type: "text/markdown;charset=utf-8;" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       });
     }
   }
@@ -540,6 +600,7 @@
    */
   function renderApiResponse(markdownText, modelName) {
     if (!dom.responseContent) return;
+    lastGeneratedRawText = markdownText || "";
 
     // 마크다운 HTML 파싱
     var renderedHtml = "";

@@ -3418,6 +3418,27 @@ details.raw-json-details[open] {
   color: #38bdf8;
 }
 
+.quick-chip-btn.active-chip {
+  background: var(--accent-light, #eff6ff);
+  border-color: var(--accent-primary, #2563eb);
+  color: var(--accent-primary, #2563eb);
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+[data-theme="dark"] .quick-chip-btn.active-chip {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+
+.llm-response-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Input Area */
 .llm-input-area {
   margin-bottom: 16px;

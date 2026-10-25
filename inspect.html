@@ -83,6 +83,12 @@
                 <span class="label-hint">공란 시 최신 버전(v17) 자동 적용</span>
               </div>
               <input id="configId" class="input" type="text" value="" placeholder="공란 시 최신 버전 자동 적용" />
+
+              <div class="label" style="margin-top: 14px;">
+                <span><i class="bi bi-robot"></i> Gemini API Key (LLM 심층 질의용)</span>
+                <span class="label-hint">시스템 내부 고정 적용 (화면 변경 불가)</span>
+              </div>
+              <input class="input" type="password" value="********************************" readonly disabled style="opacity: 0.75; cursor: not-allowed; background: var(--bg-primary);" title="Gemini API Key는 안전하게 내부 고정되어 실시간 연동됩니다." />
             </div>
           </details>
 
@@ -243,17 +249,10 @@
           </summary>
 
           <div class="llm-chat-body">
-            <!-- 상단 설정 & 모델/키 바 -->
+            <!-- 상단 설정 & 모델 바 -->
             <div class="llm-config-bar">
               <div class="llm-config-item">
-                <label for="llmApiKey"><i class="bi bi-key-fill"></i> Gemini API Key</label>
-                <div class="llm-input-with-action">
-                  <input id="llmApiKey" class="input input-sm" type="password" placeholder="Gemini API Key..." />
-                  <button id="llmKeyToggleBtn" class="btn btn-ghost btn-sm" type="button" title="키 표시/숨김"><i class="bi bi-eye"></i></button>
-                </div>
-              </div>
-              <div class="llm-config-item">
-                <label for="llmModelSelect"><i class="bi bi-cpu"></i> LLM 모델</label>
+                <label for="llmModelSelect"><i class="bi bi-cpu"></i> LLM 모델 선택</label>
                 <select id="llmModelSelect" class="select select-sm">
                   <option value="gemini-3.5-flash-lite" selected>Gemini 3.5 Flash-Lite (빠르고 정확함 - 권장)</option>
                   <option value="gemini-flash-latest">Gemini Flash Latest (기본 플래시)</option>
@@ -262,6 +261,9 @@
                 </select>
               </div>
               <div class="llm-config-badge-group">
+                <span class="llm-feature-pill" title="Gemini API Key는 보안을 위해 시스템 내부 고정되어 실시간 통신합니다.">
+                  <i class="bi bi-shield-lock-fill"></i> Gemini API 보안 고정 연동
+                </span>
                 <span class="llm-feature-pill" title="JSON 내 바운딩 박스/좌표를 제거하여 컨텍스트 토큰을 절약합니다.">
                   <i class="bi bi-bounding-box-circles"></i> 위치좌표 자동 정제 ON
                 </span>

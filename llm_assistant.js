@@ -58,8 +58,6 @@
   function cacheDomElements() {
     dom.container = document.getElementById("llmChatDetails");
     dom.statusBadge = document.getElementById("llmDocStatusBadge");
-    dom.apiKeyInput = document.getElementById("llmApiKey");
-    dom.keyToggleBtn = document.getElementById("llmKeyToggleBtn");
     dom.modelSelect = document.getElementById("llmModelSelect");
     dom.questionInput = document.getElementById("llmQuestionInput");
     dom.sendBtn = document.getElementById("llmSendBtn");
@@ -94,17 +92,6 @@
 
   // 이벤트 바인딩
   function bindEvents() {
-    // 키 표시/숨김 토글
-    if (dom.keyToggleBtn && dom.apiKeyInput) {
-      dom.keyToggleBtn.addEventListener("click", function () {
-        var isPassword = dom.apiKeyInput.type === "password";
-        dom.apiKeyInput.type = isPassword ? "text" : "password";
-        dom.keyToggleBtn.innerHTML = isPassword
-          ? '<i class="bi bi-eye-slash"></i>'
-          : '<i class="bi bi-eye"></i>';
-      });
-    }
-
     // 질문 전송 버튼
     if (dom.sendBtn) {
       dom.sendBtn.addEventListener("click", handleSendQuestion);
@@ -149,7 +136,7 @@
       });
     }
 
-    // 전송 프롬프트 미리보기 토글
+    // 전송 프롬프트 미리보기 토글 (화면 프리징 및 스크롤 부하 방지: 경량 발췌 렌더링)
     if (dom.previewContextBtn && dom.previewDetails && dom.previewContent) {
       dom.previewContextBtn.addEventListener("click", function () {
         var isShown = dom.previewDetails.style.display !== "none";
@@ -159,7 +146,17 @@
         } else {
           var payload = currentPayloadRef || (window.currentRawPayload || null);
           var systemPrompt = buildSystemPromptAndContext(payload, dom.questionInput ? dom.questionInput.value : "");
-          dom.previewContent.textContent = systemPrompt;
+          
+          // 💡 화면 렌더링 부하 및 스크롤 먹통 방지: 상위 2,500자만 발췌 표시
+          var PREVIEW_MAX_LEN = 2500;
+          var displayPrompt = systemPrompt;
+          if (systemPrompt.length > PREVIEW_MAX_LEN) {
+            displayPrompt = systemPrompt.slice(0, PREVIEW_MAX_LEN) + 
+              "\n\n------------------------------------------------------------\n" +
+              "💡 [안내] 화면 스크롤 부하 및 브라우저 프리징을 방지하기 위해 상위 2,500자만 발췌 표시합니다.\n" +
+              "   (실제 Gemini LLM에는 정제된 전체 서류 데이터 " + Math.round(systemPrompt.length / 1024) + " KB가 안전하게 실시간 전송됩니다.)";
+          }
+          dom.previewContent.textContent = displayPrompt;
           dom.previewDetails.style.display = "block";
           dom.previewDetails.open = true;
         }
@@ -190,6 +187,10 @@
    * 1. 위치값(Bounding Box, 좌표, Polygons 등) 재귀적 정제 함수
    * LLM 컨텍스트 토큰을 최소화하고 노이즈를 제거하여 답변 품질 극대화
    */
+  /**
+   * 1. 위치값(Bounding Box, 좌표, Polygons 등) 및 대용량 HTML/바이너리 데이터 정제 함수
+   * LLM 컨텍스트 토큰을 최소화하고 노이즈 및 브라우저 메모리 부하를 원천 차단
+   */
   function cleanOcrJsonForLlm(data) {
     if (!data) return null;
 
@@ -209,19 +210,33 @@
       pixel_coords: true,
       location: true,
       locations: true,
-      upstage_seq: true
+      upstage_seq: true,
+      // 💡 화면 프리징 및 부하 원인인 대용량 Raw HTML/덤프 키 완전 제외
+      html: true,
+      raw_html: true,
+      ocr_html: true,
+      raw_content: true,
+      table_html: true,
+      figure: true,
+      additional_values_raw: true,
+      sources_raw: true,
+      tool_calls_raw: true
     };
 
     function sanitize(obj, depth) {
-      if (depth > 12) return "[Deep Nested]";
+      if (depth > 8) return "[Nested Object]";
       if (obj === null || obj === undefined) return obj;
 
       if (typeof obj === "string") {
-        // HTML 내의 data-coord="top-left:(...); bottom-right:(...)" 제거
+        // HTML 내의 data-coord 제거
         var cleanStr = obj.replace(/\s*data-coord\s*=\s*\\?['"][^'"]*\\?['"]/gi, "");
-        // 너무 긴 base64 이미지나 바이너리는 축약
-        if (cleanStr.length > 3000 && (cleanStr.startsWith("data:image") || cleanStr.startsWith("<svg"))) {
-          return "[Image Data Omitted]";
+        // 너무 긴 base64 이미지, 바이너리, 또는 거대한 HTML 블록 축약
+        if (cleanStr.length > 800) {
+          if (cleanStr.indexOf("<html") !== -1 || cleanStr.indexOf("<table") !== -1 || cleanStr.indexOf("<figure") !== -1 || cleanStr.startsWith("data:image")) {
+            return "[Raw OCR HTML Omitted for Performance]";
+          }
+          // 일반 문자열도 1000자 초과 시 요약
+          return cleanStr.slice(0, 1000) + "... [Truncated]";
         }
         return cleanStr;
       }
@@ -231,7 +246,9 @@
       }
 
       if (Array.isArray(obj)) {
-        return obj.map(function (item) {
+        // 배열 원소가 30개를 초과하면 상위 30개만 유지
+        var sliceArr = obj.length > 30 ? obj.slice(0, 30) : obj;
+        return sliceArr.map(function (item) {
           return sanitize(item, depth + 1);
         }).filter(function (item) {
           return item !== undefined;
@@ -244,7 +261,7 @@
         var key = keys[i];
         var lowerKey = key.toLowerCase();
 
-        // 위치값 관련 필드는 무조건 스킵
+        // 위치값 관련 및 거대 필드는 무조건 스킵
         if (IGNORED_KEYS[lowerKey] || lowerKey.indexOf("coord") !== -1 || lowerKey.indexOf("bounding") !== -1) {
           continue;
         }
@@ -262,84 +279,80 @@
 
   /**
    * 2. 서류 스키마 및 원본 추출 데이터 선별 정리
-   * 기계적 1차 검토 결과(comparison_matrix, overall_status)는 축약하고,
-   * 서류 원본의 실제 추출 필드(extract_result, documents, data)를 중심 데이터셋으로 재구성
+   * 거대한 parse 스텝(OCR raw HTML)은 제외하고,
+   * 서류 원본의 실제 추출 필드(extract_result, documents, data)를 중심 데이터셋으로 재구성 (10~30KB 내외 초경량)
    */
   function extractKeyDocumentsData(rawPayload) {
     if (!rawPayload) return null;
-    var cleaned = cleanOcrJsonForLlm(rawPayload);
 
     var organized = {
       documents_extracted: {},
       document_keys: {},
-      raw_text_excerpts: []
+      date_records: {},
+      summary_notes: ""
     };
 
-    // (A) Upstage include: ["all"] steps 또는 output 처리
-    var stepsList = (cleaned && Array.isArray(cleaned.output)) ? cleaned.output : ((cleaned && Array.isArray(cleaned.steps)) ? cleaned.steps : null);
+    // 1) Upstage include: ["all"] steps 또는 output 처리
+    var stepsList = (rawPayload && Array.isArray(rawPayload.output)) ? rawPayload.output : ((rawPayload && Array.isArray(rawPayload.steps)) ? rawPayload.steps : null);
     if (stepsList && stepsList.length > 0) {
       for (var i = 0; i < stepsList.length; i++) {
         var step = stepsList[i];
         if (!step) continue;
-        var modelName = String(step.model || step.step_name || "").toLowerCase();
+        var modelName = String(step.model || step.step_name || step.step_type || "").toLowerCase();
 
-        // 1) 개별 서류 추출 스키마 데이터 (extract step)
+        // 💡 중요: step_1_parse 등 1.5MB짜리 Raw HTML 파싱 덤프 step은 100% 제외
+        if (modelName.indexOf("parse") !== -1) {
+          continue;
+        }
+
+        // extract step의 documents 수집
         if (step.result && Array.isArray(step.result.documents)) {
           for (var d = 0; d < step.result.documents.length; d++) {
             var docItem = step.result.documents[d];
             var dName = docItem.document_type || docItem.schema_name || ("doc_" + d);
-            organized.documents_extracted[dName] = docItem.data || docItem;
+            organized.documents_extracted[dName] = cleanOcrJsonForLlm(docItem.data || docItem);
           }
         } else if (Array.isArray(step.content)) {
           for (var c = 0; c < step.content.length; c++) {
             var cItem = step.content[c];
             if (!cItem || !cItem.text) continue;
             try {
-              var parsedInner = (typeof cItem.text === "string" && (cItem.text.startsWith("{") || cItem.text.startsWith("[")))
-                ? JSON.parse(cItem.text)
-                : cItem.text;
-              if (parsedInner && typeof parsedInner === "object") {
-                var docType = parsedInner.document_type || modelName.replace(/^information extract\s*-\s*/i, "").replace(/_schema$/i, "");
-                if (docType) {
-                  organized.documents_extracted[docType] = parsedInner;
+              var textTrim = String(cItem.text).trim();
+              if (textTrim.startsWith("{") || textTrim.startsWith("[")) {
+                var parsedInner = JSON.parse(textTrim);
+                if (parsedInner && typeof parsedInner === "object" && !parsedInner.api) {
+                  var docType = parsedInner.document_type || modelName.replace(/^information extract\s*-\s*/i, "").replace(/_schema$/i, "").trim();
+                  if (docType) {
+                    organized.documents_extracted[docType] = cleanOcrJsonForLlm(parsedInner);
+                  }
                 }
-              } else if (typeof parsedInner === "string" && parsedInner.length > 50) {
-                // OCR 텍스트 요약본
-                organized.raw_text_excerpts.push(parsedInner.slice(0, 1500));
               }
-            } catch (e) {
-              // 일반 텍스트
-              if (typeof cItem.text === "string" && cItem.text.length > 50) {
-                organized.raw_text_excerpts.push(cItem.text.slice(0, 1500));
-              }
-            }
+            } catch (e) {}
           }
         }
       }
     }
 
-    // (B) instruct_result / structured_result 내의 document_keys 및 extract evidence
-    var struct = (cleaned.instruct_result && cleaned.instruct_result.structured_result) || cleaned.structured_result || cleaned;
+    // 2) instruct_result / structured_result 내의 핵심 서류 키 및 일자 흐름
+    var struct = (rawPayload.instruct_result && rawPayload.instruct_result.structured_result) || rawPayload.structured_result || rawPayload;
     if (struct.document_keys) {
-      organized.document_keys = struct.document_keys;
+      organized.document_keys = cleanOcrJsonForLlm(struct.document_keys);
     }
     if (struct.date_checks) {
-      organized.date_records = struct.date_checks;
+      organized.date_records = cleanOcrJsonForLlm(struct.date_checks);
     }
-    if (struct.document_extract_evidence) {
-      organized.extracted_evidence = struct.document_extract_evidence;
+    if (struct.one_line_summary) {
+      organized.summary_notes = struct.one_line_summary;
     }
 
-    // 만약 documents_extracted가 비어있다면 cleaned 전체를 축약하여 제공
+    // 만약 documents_extracted가 비어있는 경우 (단순 JSON 포맷)
     if (Object.keys(organized.documents_extracted).length === 0) {
-      // 1차 비교 매트릭스(comparison_matrix)는 너무 크므로 가볍게 유지
-      var fallbackData = Object.assign({}, cleaned);
-      if (fallbackData.comparison_matrix && Array.isArray(fallbackData.comparison_matrix)) {
-        fallbackData.comparison_matrix = fallbackData.comparison_matrix.map(function (row) {
-          return { category: row.category, item: row.check_item_ko || row.check_item, result: row.result };
-        });
-      }
-      return fallbackData;
+      var safeData = {};
+      if (struct.document_keys) safeData.document_keys = struct.document_keys;
+      if (struct.date_checks) safeData.date_checks = struct.date_checks;
+      if (struct.document_presence) safeData.document_presence = struct.document_presence;
+      if (struct.discrepancy_candidates) safeData.discrepancy_candidates = cleanOcrJsonForLlm(struct.discrepancy_candidates);
+      return cleanOcrJsonForLlm(safeData);
     }
 
     return organized;
@@ -396,7 +409,7 @@
    */
   async function callGeminiApi(promptText, apiKey, modelName) {
     if (!apiKey) {
-      throw new Error("Gemini API Key가 설정되지 않았습니다. API 설정을 확인해주세요.");
+      throw new Error("Gemini API Key가 설정되지 않았습니다.");
     }
     modelName = modelName || DEFAULT_MODEL;
 
@@ -472,10 +485,10 @@
       return;
     }
 
-    var apiKey = dom.apiKeyInput ? dom.apiKeyInput.value.trim() : DEFAULT_API_KEY;
+    // 💡 화면에서 분리되어 안전하게 고정된 Gemini API Key 사용
+    var apiKey = DEFAULT_API_KEY;
     if (!apiKey) {
-      alert("Gemini API Key를 입력해주세요.");
-      if (dom.apiKeyInput) dom.apiKeyInput.focus();
+      alert("Gemini API Key가 내부 설정되지 않았습니다.");
       return;
     }
 

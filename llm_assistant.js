@@ -347,6 +347,7 @@
     if (!rawPayload) return null;
 
     var organized = {
+      api_review_summary: null, // 1차 API 검토 요약 결과 (교차검증용)
       documents_extracted: {},
       document_keys: {},
       date_records: {},
@@ -366,6 +367,20 @@
           continue;
         }
 
+        // review step(1차 API 검토 요약 결과) 수집
+        if (modelName.indexOf("review") !== -1 || modelName.indexOf("instruct") !== -1) {
+          if (step.result && step.result.structured_result) {
+            var sr = step.result.structured_result;
+            organized.api_review_summary = cleanOcrJsonForLlm({
+              overall_status: sr.overall_status,
+              overall_alert_level: sr.overall_alert_level,
+              one_line_summary: sr.one_line_summary,
+              recommended_action: sr.recommended_action,
+              discrepancy_candidates: sr.discrepancy_candidates
+            });
+          }
+        }
+
         // extract step의 documents 수집
         if (step.result && Array.isArray(step.result.documents)) {
           for (var d = 0; d < step.result.documents.length; d++) {
@@ -381,7 +396,16 @@
               var textTrim = String(cItem.text).trim();
               if (textTrim.startsWith("{") || textTrim.startsWith("[")) {
                 var parsedInner = JSON.parse(textTrim);
-                if (parsedInner && typeof parsedInner === "object" && !parsedInner.api) {
+                if (parsedInner && parsedInner.structured_result) {
+                  var srInner = parsedInner.structured_result;
+                  organized.api_review_summary = cleanOcrJsonForLlm({
+                    overall_status: srInner.overall_status,
+                    overall_alert_level: srInner.overall_alert_level,
+                    one_line_summary: srInner.one_line_summary,
+                    recommended_action: srInner.recommended_action,
+                    discrepancy_candidates: srInner.discrepancy_candidates
+                  });
+                } else if (parsedInner && typeof parsedInner === "object" && !parsedInner.api) {
                   var docType = parsedInner.document_type || modelName.replace(/^information extract\s*-\s*/i, "").replace(/_schema$/i, "").trim();
                   if (docType) {
                     organized.documents_extracted[docType] = cleanOcrJsonForLlm(parsedInner);
@@ -404,6 +428,15 @@
     }
     if (struct.one_line_summary) {
       organized.summary_notes = struct.one_line_summary;
+    }
+    if (!organized.api_review_summary && (struct.overall_status || struct.discrepancy_candidates || struct.one_line_summary)) {
+      organized.api_review_summary = cleanOcrJsonForLlm({
+        overall_status: struct.overall_status,
+        overall_alert_level: struct.overall_alert_level,
+        one_line_summary: struct.one_line_summary,
+        recommended_action: struct.recommended_action,
+        discrepancy_candidates: struct.discrepancy_candidates
+      });
     }
 
     // 만약 documents_extracted가 비어있는 경우 (단순 JSON 포맷)
@@ -436,9 +469,15 @@
       "■ [핵심 분석 및 파싱 규칙 (Mandatory Rules)]",
       "1. 위치값(Coordinates) 절대 무시:",
       "   - JSON 내에 남아있을 수 있는 바운딩 박스, 좌표값([x, y] 등), 픽셀 위치값은 서류 내용 분석에 전혀 불필요하므로 완전히 무시하십시오.",
-      "2. 원본 서류(Raw Document) 데이터 중심 분석:",
-      "   - API 시스템이 1차 기계적으로 수행한 검토 결과(comparison_matrix, overall_status 등)는 이미 사용자가 화면에서 확인하였으므로 질문의 주 대상으로 삼지 마십시오.",
-      "   - 오직 서류 원본에서 직접 추출된 필드값(송장 번호, L/C 번호, B/L 번호, 품목명, 단가, 수량, 금액, 발행일, 선적일, 컨테이너 번호, 씰 번호, 서명자, 비고 및 특약사항 등)을 기반으로 심층 분석하십시오.",
+      "2. 서류 원본 데이터 및 1차 API 검토 요약(api_review_summary) 활용 지침:",
+      "   - [기본 원칙]: 서류 원본 추출 데이터(documents_extracted)를 최우선 진실의 근거(Ground Truth)로 삼아 정밀 분석하십시오.",
+      "   - [1차 API 검토 교차검증 질문 시]:",
+      "     만약 사용자가 'API 1차 검토 요약 교차검증'을 질문하거나 API 검토 결과의 타당성을 문의한 경우,",
+      "     'api_review_summary'에 기재된 1차 API 판정(종합 상태, 불일치 의심 목록 discrepancy_candidates, 권고사항)을 서류 원본과 엄밀히 비교 분석하십시오.",
+      "     ① API가 지적한 불일치가 실제로 타당한지(적합/불일치 확정),",
+      "     ② 추출값 오인식이나 서류 맥락 오해로 인한 과잉 지적(오탐/False Positive)인지,",
+      "     ③ 1차 API가 미처 파악하지 못하고 누락한 서류 간 하자나 불일치가 있는지,",
+      "     시니어 신용장 심사역의 관점에서 명확한 표(항목 / 1차 API 판정 / 원본 대조 실상 / 2차 심사 최종 평가 / 조치 의견)와 함께 종합의견을 명료하게 보고하십시오.",
       "3. 서류 스키마 파싱 지침:",
       "   - lc_schema: 신용장 조건 (L/C 번호, 개설일, 유효기일, 금액, 선적기한, 분할/환적 조건, 요구서류 등)",
       "   - commercial_invoice_schema: 상업송장 (송장일자, 품목별 명세, 단가, 수량, 계산 총액, 지급조건, 서명 등)",
